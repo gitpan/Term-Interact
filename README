@@ -1,0 +1,101 @@
+Term/Interact version 0.40
+==========================
+
+NAME
+    Term::Interact - Get Data Interactively From User
+
+SYNOPSIS
+      use Term::Interact;
+
+      my $ti = Term::Interact->new( @args );
+
+      # interactive
+      $validated_value = $ti->get( @args );
+
+      # non interactive
+      $validated_value = $ti->sql_check( $value, @args );
+
+      $validated_value = $ti->list_check( $value, @args );
+
+      $validated_value = $ti->regex_check( $value, @args );
+
+      $validated_value = $ti->compare_check( $value, @args );
+
+DESCRIPTION
+    Term::Interact provides a way to interactively get values from the user.
+    It allows date, text and number processing through a *simple* API.
+
+    The new() method constructs an object using default values and passed in
+    parameters. The get() method prompts the user for values and may use one
+    or more "check" methods to validate the values provided by the user.
+    These "check" methods are also available for stand alone usage. Check
+    methods include:
+
+    "sql_check"
+      for checking input against the return value of SQL statements
+
+    "regex_check"
+      for checking input against reqular expressions
+
+    "list_check"
+      for checking input against a list of acceptable values
+
+    "compare_check"
+      for checking that input satisfies one or more comparison expressions
+
+    Finally, while this module steers clear of offering explicit checks like
+    'phone_number_check' or 'email_check', you may certainly add them by
+    subclassing this module and simply providing the desired check as a
+    subroutine. Just follow the pattern of the built in checks in the source
+    code for Term::Interact.
+
+ONE EXAMPLE
+
+     my $num1 = $ti->get(
+         msg         => 'Enter a single digit number.',
+         prompt      => 'Go ahead, make my day: ',
+         re_prompt   => 'Try Again Here: ',
+         regex_check => [
+                          [
+                            qr/^\d$/,
+                            '%s is not a single digit number!'
+                          ]
+                        ]
+     );
+     #
+     # Resulting Interaction looks like:
+     #
+     # Enter a single digit number.
+     #    Go ahead, make my day: w
+     #    'w' is not a single digit number!
+     #    Try Again Here: 23
+     #    '23' is not a single digit number!
+     #    Try Again Here: 2
+
+DOCUMENTATION
+
+    For more examples and full documentation, see perldoc Term::Interact
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules:
+
+  Text::Autoformat
+  Term::ReadKey
+  Date::Manip
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2002 Phil R Lawrence.  All rights reserved.
+
+This module is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+

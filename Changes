@@ -1,0 +1,6 @@
+Revision history for Perl extension Term::Interact.
+
+0.40  Wed Apr 10 11:25:33 2002
+	- original version; created by h2xs 1.21 with options
+		-AX -n Term::Interact
+
