@@ -1,6 +1,23 @@
 Revision history for Perl extension Term::Interact.
 
-0.40  Wed Apr 10 11:25:33 2002
+0.40  Wed Apr 10 1:25:33 2002
 	- original version; created by h2xs 1.21 with options
 		-AX -n Term::Interact
+
+0.41 Tue Jun 19 2002
+        - upgraded documentation.
+        - major simplification of the API.  Sorry, no backward
+          compatability, but the new API rocks. 
+        - added translate method.
+        - added filetest check.
+        - added various formatting parms for greater "look
+          and feel" control.
+        - *all* output to FH_OUT now uses format() from 
+          Text::Autoformat for consistency.
+        - added AUTOLOADING of get/set methods for modifying
+          parameters stored in Term::Interact objects.
+        - added new_check method to offload processing of
+          check parms from the individual check subs.  Now
+          all the check subs expect check objects, which 
+          are constructed by new_check.
 

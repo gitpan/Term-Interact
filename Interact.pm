@@ -2,7 +2,7 @@ package Term::Interact;
 
 =head1 NAME
 
-Term::Interact - Get Data Interactively From User
+Term::Interact - Interactively Get Validated Data
 
 =head1 SYNOPSIS
 
@@ -10,64 +10,39 @@ Term::Interact - Get Data Interactively From User
 
   my $ti = Term::Interact->new( @args );
 
-  # interactive
-  $validated_value = $ti->get( @args );
+  # get validated data interactively
+  $validated_data = $ti->get( @args );
 
-  # non interactive
-  $validated_value = $ti->sql_check( $value, @args );
-
-  $validated_value = $ti->list_check( $value, @args );
-
-  $validated_value = $ti->regex_check( $value, @args );
-
-  $validated_value = $ti->compare_check( $value, @args );
+  # check existing data non-interactively
+  die "Invalid!" unless $ti->validate( $data, @args );
 
 =head1 DESCRIPTION
 
-Term::Interact provides a way to interactively get values from the user.  It allows date, text and number processing through a I<simple> API.
-
-The new() method constructs an object using default values and passed in parameters.  The get() method prompts the user for values and may use one or more C<check> methods to validate the values provided by the user.  These C<check> methods are also available for stand alone usage.  Check methods include:
-
-=over 2
-
-=item C<sql_check>
-
-for checking input against the return value of SQL statements
-
-=item C<regex_check>
-
-for checking input against reqular expressions
-
-=item C<list_check>
-
-for checking input against a list of acceptable values
-
-=item C<compare_check>
-
-for checking that input satisfies one or more comparison expressions
-
-=back
-
-Finally, while this module steers clear of offering explicit checks like 'phone_number_check' or 'email_check', you may certainly add them by subclassing this module and simply providing the desired check as a subroutine.  Just follow the pattern of the built in checks in the source code for Term::Interact.
+Term::Interact enables you to interactively get validated data from a user.  This is accomplished via a I<simple> API, wherein you specify various parameters for prompting the user, as well as "checks" with which gotten data will be validated.
 
 =head1 EXAMPLES
 
- # set up object
+ # set up object with some optional parameters
  my $ti = Term::Interact->new(
-     date_format => '%d-%b-%Y',
-     date_format_return => '%d-%b-%Y'
+
+   # set desired date formatting behavior
+   # (See perldoc Date::Manip for syntax)
+   date_format_display  =>  '%d-%b-%Y',
+   date_format_return   =>  '%s',
+
+   # database handle (see perldoc DBI) to
+   # allow sql_checks.
+   dbh  =>  $dbh,
  );
 
  my $num1 = $ti->get(
-     msg         => 'Enter a single digit number.',
-     prompt      => 'Go ahead, make my day: ',
-     re_prompt   => 'Try Again Here: ',
-     regex_check => [
-                      [
-                        qr/^\d$/,
-                        '%s is not a single digit number!'
-                      ]
-                    ]
+   msg        =>  'Enter a single digit number.',
+   prompt     =>  'Go ahead, make my day: ',
+   re_prompt  =>  'Try Again Here: ',
+   check      =>  [
+                    qr/^\d$/,
+                    '%s is not a single digit number!'
+                  ],
  );
  #
  # Resulting Interaction looks like:
@@ -80,13 +55,13 @@ Finally, while this module steers clear of offering explicit checks like 'phone_
  #    Try Again Here: 2
 
  my $date = $ti->get (
-     type          => 'date',
-     name          => 'Date from 2001',
-     confirm       => 1,
-     compare_check => [
-                        ['<= 12-31-2001', '%s is not %s.'],
-                        ['>= 01/01/2001', '%s is not %s.'],
-                      ]
+   type     =>  'date',
+   name     =>  'Date from 2001',
+   confirm  =>  1,
+   check    =>  [
+                  ['<= 12-31-2001', '%s is not %s.'],
+                  ['>= 01/01/2001', '%s is not %s.'],
+                ]
  );
  #
  # Resulting Interaction looks like:
@@ -97,22 +72,23 @@ Finally, while this module steers clear of offering explicit checks like 'phone_
  #    '12-Mar-2002' is not <= 31-Dec-2001.
  #    > foo
  #    'foo' is not a valid date
+ #    > 2000-12-31
+ #    You entered: '31-Dec-2000'. Is this correct? (Y|n)
+ #    '31-Dec-2000' is not >= 01/01/2001.
  #    > 2001-02-13
  #    You entered: '13-Feb-2001'. Is this correct? (Y|n)
 
  my $states_aref = $ti->get (
-     msg       => 'Please enter a comma delimited list of states.',
-     prompt    => 'State: ',
-     re_prompt => 'Try Again: ',
-     delimiter => ',',
-     case      => 'uc',
-     sql_check => [
-                    $dbh,
-                    [
-                      'SELECT state FROM states ORDER BY state',
-                      '%s is not a valid state code.  Valid codes are: %s'
-                    ]
-                  ]
+   msg        =>  'Please enter a comma delimited list of states.',
+   prompt     =>  'State: ',
+   re_prompt  =>  'Try Again: ',
+   delimiter  =>  ',',
+   case       =>  'uc',
+   dbh        =>  $dbh,
+   check      =>  [
+                    'SELECT state FROM states ORDER BY state',
+                    '%s is not a valid state code.  Valid codes are: %s'
+                  ],
  );
  #
  # Resulting Interaction looks like:
@@ -129,11 +105,11 @@ Finally, while this module steers clear of offering explicit checks like 'phone_
 
 
  my $num2 = $ti->get (
-     name          => 'Number Less Than 10 and More than 3',
-     compare_check => [
-                        [' < 10', '%s is not less than 10.'],
-                        ['> 3', '%s is not %s.']
-                      ]
+   name   =>  'Number Less Than 10 and More than 3',
+   check  =>  [
+                [' < 10', '%s is not less than 10.'],
+                ['>3', '%s is not %s.'],
+              ]
  );
  #
  # Resulting Interaction looks like:
@@ -150,9 +126,9 @@ Finally, while this module steers clear of offering explicit checks like 'phone_
  #    > 5
 
  my $grades = $ti->get (
-     name       => 'Letter grade',
-     delimiter  => ',',
-     list_check => [ 'A', 'B', 'C', 'D', 'F' ]
+   name       =>  'Letter grade',
+   delimiter  =>  ',',
+   check      =>  [ 'A', 'B', 'C', 'D', 'F' ],
  );
  #
  # Resulting Interaction looks like:
@@ -166,47 +142,63 @@ Finally, while this module steers clear of offering explicit checks like 'phone_
 
 
  # If multiple checks are specified, the ordering
- #  is preserved if parms are passed as a list or aref.
- # In the example below, the sql_check will be applied
- #  before the regex_check.
+ # is preserved.  In the example below, the sql_check
+ # will be applied before the regex_check.
  my $foo = $ti->get (
-   [
-     name        => $name,
-     delimiter   => $delim,
-     sql_check   => $aref_sql,
-     regex_check => $aref_regex,
-   ]
- );
-
- # If multiple checks are specified, the ordering
- #  is *not* preserved if parms are passed as an href
- my $foo = $ti->get (
-   {
-     name        => $name,
-     delimiter   => $delim,
-     sql_check   => $aref_sql,
-     regex_check => $aref_regex,
-   }
+   name       =>  $name,
+   delimiter  =>  $delim,
+   check      =>  [ 'SELECT foo FROM bar', qr/aaa|bbb|ccc/ ],
  );
 
  # multiple requests in one call to get method
  my ($foo, $bar) = $ti->get (
+   [
      [
-       [
-         name          => 'foo',
-         compare_check => [ @check_arefs ],
-       ],
-       {
-         name       => 'bar',
-         delimiter  => ',',
-         list_check => \@valid_values,
-       },
-     ]
+       name   =>  'foo',
+       check  =>  [qw/ A B C /],
+     ],
+
+     # you can use an href if you prefer
+     {
+       name       =>  'bar',
+       delimiter  =>  ',',
+       check      =>  qr/kermit|der|frosch/,
+     },
+   ]
  );
+
+=head1 METHODS
+
+=over 2
+
+=item C<new>
+
+The C<new> method constructs a Term::Interact object using default values and passed in key=>value parameters (see PARAMETERS section below).  The parameter values stored in the object are subsequently accessible for reading and setting via methods named the same as the parameters.  For example:
+
+    # get the value of the date_format_return parameter
+    my $fmt = $ti->date_format_return;
+
+    # set the value of the date_format_return parameter
+    # to DD-Mon-YYYY
+    $ti->date_format_return( '%d-%b-%Y' );
+
+=item C<get>
+
+The C<get> method prompts the user for data and, if a C<check> parameter (see C<check> in the PARAMETERS section below) has been passed in, invokes the C<validate> method to validate the user-provided data.
+
+=item C<validate>
+
+The C<validate> method accepts the data to be validated as its first parameter, and then the same key=>value parameters that C<new> and C<get> accept.  One of these parameters needs to be the C<check> parameter so that validation can be performed.
+
+=item C<new_check>
+
+The C<new_check> method uses a C<check> parameter value to construct one or more check objects (which are returned in an aref).  You'll not usually invoke this method, because the C<validate> method transparently invokes it to transform its C<check> parameter value into a collection of check objects.  (These check objects are what the internal check methods actually use to validate data.)  Nonetheless, you may invoke this method if you like.  By doing so you could initially set the C<check> parameter to an aref of check objects when invoking C<get> or C<validate>.
+
+=back
 
 =head2 PARAMETERS
 
-These parameters are available for use with new(), where they will be stored within the constructed object.  They are also available for use with get() and the C<check> methods, where they will override any values stored in the object, but only for the duration of that method call.  The parameter values stored in the object during construction will not be changed by any parameter values subsequently supplied to other methods.
+These parameters are available for use with C<new>, where they will be stored within the constructed object.  They are also available for use with the C<get> and C<validate> methods, where they will override any values stored in the object, but only for the duration of that method call.  In other words, the parameter values stored in the object during construction will not be changed by any variant parameter values subsequently supplied to C<get> or C<validate>.
 
 =over 2
 
@@ -224,15 +216,31 @@ I<bool>: Defaults to 0.  Set to 1 to allow user to enter 'NULL', regardless of a
 
 =item C<timeout>
 
-I<num>: Defaults to 600 seconds.  Set to 0 to turn off the timeout functionality.  Timeout results in a fatal error which you may catch as you like.  (This option not available under MS Windows.)
+I<num>: Defaults to 600 seconds.  Set to 0 to turn off the timeout functionality.  Timeout results in a fatal error which you may catch as you like.  (The timeout parameter will be ignored under MS Windows, where its functionality is not possible.)
 
 =item C<maxtries>
 
-I<num>: Defaults to 20.  Set to 0 turn off the maxtries functionality.  Exceeding the maxtries results in a fatal error which you must catch.
+I<num>: Defaults to 20.  Set to 0 turn off the maxtries functionality.  Exceeding the maxtries results in a fatal error which you may catch as you like.
+
+=item C<shared_autoformat_args>
+
+I<href>: Defaults to {all => 1, fill => 0, right => [ the value of C<term_width> ]}.  The autoformat method from Text::Autoformat is used to format everything printed to FH_OUT.  This href will be passed to autoformat every time it is invoked.
+
+=item C<menu>
+
+I<str>: Menu that will print prior to msg.  No formatting will be performed on the menu.  No menu will be printed unless this value is set.
 
 =item C<msg>
 
-I<str>: Message that will print prior to user input prompt.  No msg will be printed if defined as 0.  If left undefined, a message will be auto-generated.
+I<str>: Message that will print prior to user input prompt.  No msg will be printed if defined as 0.  If left undefined, a message will be auto-generated based on other parameter values.
+
+=item C<msg_indent>
+
+I<num>: Defaults to 0.  Number of spaces that message will be indented from the terminal's left margin when output to FH_OUT.
+
+=item C<msg_newline>
+
+I<num>: Defaults to 1.  The number of newlines prepended to msg when it is printed to FH_OUT.
 
 =item C<prompt>
 
@@ -240,15 +248,19 @@ I<str>: Defaults to '> '.  User will be prompted for input with this string.
 
 =item C<reprompt>
 
-I<str>: User will be re-prompted for input (as necessary) with this string.
+I<str>: User will be re-prompted for input (as necessary) with this string.  Defaults to the value of C<prompt>.
+
+=item C<prompt_indent>
+
+I<num>: Defaults to 4.  Number of spaces that all prompts will be indented from the terminal's left margin when output to FH_OUT.
 
 =item C<case>
 
-I<str>: The case of user input will be adjusted.  uc, lc, and ucfirst are available.
+I<str>: If specified, the case of user input will be adjusted prior to validation.  The uc, lc, and ucfirst operators may be specified.
 
 =item C<confirm>
 
-I<bool>: The user will be prompted to confirm the input if set to 1.  Defaults to 0.
+I<bool>: Defaults to 0.  The user will be prompted to confirm the input if set to 1.
 
 =item C<delimiter>
 
@@ -256,7 +268,7 @@ I<str>: Set this parameter to allow the user to enter multiple values via delimi
 
 =item C<delimiter_spacing>
 
-I<str>: Defaults to 'auto', whereby one space will be added after each delimiter when prompting the user, and whitespace before and after any delimiters will be discarded when reading user input.  Set it to any value other than 'auto' to disable this behavior,
+I<str>: Defaults to 'auto', whereby whitespace before and after any delimiters will be discarded when reading user input.  Set it to any value other than 'auto' to disable this behavior.
 
 =item C<min_elem>
 
@@ -272,15 +284,19 @@ I<bool>: Set this parameter to require all elements of the user-entered delimite
 
 =item C<default>
 
-I<str> or I<aref>: If the user is permitted to input multiple values (i.e., you have specified a delimiter), you may specify multiple default values by passing them in an aref.  Or you may pass in one default value as a string.
+I<str> or I<aref>: If the user is permitted to input multiple values (i.e., you have specified a delimiter), you may specify multiple default values by passing them in an aref.  In any case you may pass in one default value as a string.
 
-=item C<date_format>
+=item C<interact>
 
-I<str>:  This string is used to format dates for diplay.  See Date::Manip's UnixDate function for details.  Defaults to '%c' if C<type> is set to 'date'.
+I<bool>: Defaults to 1, of course, but you may turn interact mode off.  In that case the validate method works as normal, but the get method will simply return the default value (or die if none is set).
+
+=item C<date_format_display>
+
+I<str>:  Defaults to '%c' if C<type> is set to 'date'.  This string is used to format any dates being printed to FH_OUT.  See the UnixDate function from perldoc Date::Manip for details.
 
 =item C<date_format_return>
 
-I<str>:  This string is used to format dates returned by Term::Interact methods.  See Date::Manip's UnixDate function for details.  If no date_format_return is specified, dates will be returned in epoch second format.
+I<str>:  Defaults to '%c' if C<type> is set to 'date'.  This string is used to format dates returned by the C<get> and C<validate> methods.  See Date::Manip's UnixDate function for details.
 
 =item C<FH_OUT>
 
@@ -296,66 +312,110 @@ I<num>: Defaults to 72.  If the term_width of FH_OUT is less than the default or
 
 =item C<ReadMode>
 
-I<num>:  Sets a ReadMode for user prompting.  Useful for turning terminal echo off for getting passwords.  See Term::ReadKey for details.  If set, ReadMode will be reset to 0 after each user input and in END processing.
+I<num>:  Sets the ReadMode for FH_IN during user prompting.  Useful for turning terminal echo off for getting passwords; see Term::ReadKey for details.  If this parameter is used, the ReadMode for FH_IN will be reset to 0 after each user input and in END processing.
 
-=item C<sql_check>
+=item C<dbh>
 
-I<aref>: The first element of this aref must be a valid database handle (See DBI for details).  Following that may be either SQL statements (one string each) or arefs consisting of one SQL statement and one error message each.  User-entered values must be found in the results of every SQL statement provided to be acceptable.  Examples:
+I<obj>:  This is the database handle needed to execute any sql_checks.  See perldoc DBI for details.
+
+=item C<translate>
+
+I<aref>:  Translates validated user input into something else.  Useful, for example, when you require the user to enter only one character for the sake of convenience, but you really want something more verbose returned.  The aref may contain one or more translation rules, each of which is comprised of a check (see below) and a translation string.  For example, when calling C<get> with the following, a validated user input of 'p' would be translated into the string 'portrait' before being returned to you:
+
+    translate   =>  [
+                        [ 'eq p'  => 'portrait' ],
+                        [ 'eq l'  => 'landscape' ],
+                    ]
+
+=item C<check>
+
+I<str, aref, qr//>:  This parameter accepts one string, one aref, or one compiled regular expression (qr//).  With these options you will be able to indicate one or more of the following kinds of checks to be used in validating data, as well as any error message you would like for each of the checks.
+
+CHECK VARIETIES
+
+Term::Interact comes with support for six varieties of check expressions:
 
 =over 2
 
- [ $dbh, 'SELECT zing FROM zap', 'SELECT boo FROM dap' ]
+=item sql_check
 
- [
-   $dbh,
-   ['SELECT zing FROM zap', '%s is not a zing!'],
-   [
-     'SELECT boo FROM dap',
-     '%s is not a boo!  Valid boos are %s'
-   ]
- ]
+I<str>:  A SQL statement (i.e. 'SELECT field FROM table').  Will be used to generate a list of validation values from a database.  Valid data is that which appears in the list.
+
+=item regex_check
+
+I<qr//>:  A compliled regular expression used to validate data.  Valid data is that which matches the regular expression.
+
+=item list_check
+
+I<aref>:  An aref of values used to validate data.  Valid data is that which appears in the list.
+
+=item compare_check
+
+I<str>:  A comparison test in string form.  Valid data is that which satisfies the comparison test.
+
+=item filetest_check
+
+I<str>:  A filetest operator in string form.  Valid data is that which satisfies the filetest operator.
+
+=item custom_check
+
+I<coderef>:  For special occasions, you can write your own custom check.  This must be a reference to a function that returns true if the data is valid.  To write your custom check function, follow the examples of the check functions in the source code of Term::Interact.
 
 =back 2
 
-=item C<regex_check>
-
-I<qr//> or I<aref>:  This parameter can be set to a single compiled regex, an aref with one compiled regex and one error message, or an aref with multiple compiled regexes or regex/error arefs.  User-entered values must match every regex provided to be acceptable.  Examples:
+SYNTAX
 
 =over 2
 
- qr/^\d+$/
+Possible values when specifying a single check:
 
- [ qr/^\d+$/, 'That contained non-digits!' ]
+=over 2
 
- [
-   [qr/^\d+/, "%s doesn't start with digits!"],
-   qr/foo/
- ]
+  [   $check_aref,    $err_str    ]
+           -or-
+  [   $check_aref                 ]
+           -or-
+      $check_aref
+           -or-
+  [   $check_regex,   $err_str    ]
+           -or-
+  [   $check_regex                ]
+           -or-
+      $check_regex
+           -or-
+  [   $check_str,     $err_str    ]
+           -or-
+  [   $check_str                  ]
+           -or-
+      $check_str
 
 =back 2
 
-=item C<list_check>
-
-I<aref>: This aref contains legitimate values against which user input will be checked.
-
-=item C<compare_check>
-
-I<aref>: This aref contains one comparison test, a comparison test and error message, or arefs of comparison tests and error messages.  Operators will be split from the front of the comparison tests.  All perl operators except <=> and cmp (reasonably) are available.  Examples:
+Possible values when specifying multiple checks:
 
 =over 2
 
- [ '>6' ]
+  [
+    [ $check_aref,    $err_str  ],
+    [ $check_aref               ],
+      $check_aref,
+    [ $check_regex,   $err_str  ],
+    [ $check_regex              ],
+      $check_regex,
+    [ $check_str,     $err_str  ],
+    [ $check_str                ],
+      $check_str,
+  ]
 
- [ 'eq boo far', 'You did not say \'boo far\'!' ]
+=back 2
 
- [ '> 6', ' < 11' ] # whitespace around operator is ignored
+NOTE
 
- [
-   ['>=6', '%s is not %s!'],
-   ['<11', 'That was not less than eleven!'
- ]
+=over 2
 
- [ ['> 12/31/2015', '%s is not %s!'], '<11' ]
+This module steers clear of offering explicit checks like 'phone_number_check' or 'email_address_check'.  In the author's opinion one may generally obtain all the convenience and code readability one needs via the built in varieties of checks.  However, if you have regular need for an additional check you'll likely want to steer clear of the built in custom_check option (see above).  You can more permanently add your own custom checks by subclassing Term::Interact and providing the desired checks as subroutines (all the check subs follow a simple API, just follow the pattern).  Additionally you will need to modify the private _classify_check_type function.
+
+=back 2
 
 =back 2
 
@@ -379,10 +439,9 @@ use Text::Autoformat;
 use Term::ReadKey;
 use Date::Manip;
 
-
 use vars qw( $VERSION );
 
-$VERSION = '0.40';
+$VERSION = '0.41';
 
 sub new {
     my $class = shift;
@@ -411,10 +470,8 @@ sub process_args {
             die "invalid arg";
         }
     }
-    my %args = @_;
 
-    # we set this flag before adding in the keys from %$self
-    my $passed_args_include_ordered_checks_list = 1 if (exists $args{ordered_checks});
+    my %args = @_;
 
     ### $self processing
     # use anything from self that hasn't been specified by args
@@ -426,51 +483,35 @@ sub process_args {
 
     ### %defaults setup
     my %defaults = (
-        allow_null          => 0,
-        timeout             => 600,
-        maxtries            => 20,
-        prompt              => '> ',
-        confirm             => 0,
-        echo_quote          => "'",
-        delimiter_spacing   => 'auto',
-        term_width          => 72,
+        interact                => 1,
+        allow_null              => 0,
+        timeout                 => 600,
+        maxtries                => 20,
+        msg_newline             => 1,
+        msg_indent              => 0,
+        prompt                  => '> ',
+        prompt_indent           => 4,
+        confirm                 => 0,
+        echo_quote              => "'",
+        delimiter_spacing       => 'auto',
+        term_width              => 72,
+        dbh                     => '',
+        FH_IN                   => \*STDIN,
+        FH_OUT                  => \*STDOUT,
     );
+
     for (keys %defaults) {
         unless (exists $args{$_}) {
             $args{$_} = $defaults{$_};
         }
     }
 
-    ### Display related setup
-    $args{FH_IN}  = \*STDIN  unless defined $args{FH_IN};
-    $args{FH_OUT} = \*STDOUT unless defined $args{FH_OUT};
+    # term width settings
     my ($width) = GetTerminalSize( $args{FH_OUT} );
-    $args{term_width}   = defined $args{term_width}
-                        ? ($width < $args{term_width})
-                            ? $width
-                            : $args{term_width}
-                        : $width;
+    $args{term_width} = ($width < $args{term_width} ? $width : $args{term_width});
 
-    ### ordered_checks processing
-    # if an ordered_checks list was passed in we'll honor it and not modify it
-    unless ($passed_args_include_ordered_checks_list) {
-
-        # if exists $args{ordered_checks}, it is a pointer to the list contained in $self.
-        # let's make a copy of the contents of that data and modify the *copy*.  Otherwise,
-        # if we modify the pointer in $args{ordered_checks}, we'll also end up with the
-        # modified list in $self :-( .
-        my @ordered_checks = (defined $args{ordered_checks}) ? @{$args{ordered_checks}} : ();
-
-        for (@_) {
-            if (defined and !ref and /_check$/) {
-                my $check_name = $_;
-                push @ordered_checks, $check_name unless (grep /$check_name/ => @ordered_checks);
-            }
-        }
-
-        $args{ordered_checks} = \@ordered_checks;
-
-    }
+    # autoformat settings
+    $args{shared_autoformat_args} = {all => 1, fill => 0, right => $args{term_width}};
 
     ### Date related setup
     if (defined $args{type} and $args{type} eq 'date') {
@@ -494,7 +535,8 @@ sub process_args {
         }
 
         # default the date formatting
-        $args{date_format} = '%c' unless (defined $args{date_format});
+        $args{date_format_display} = '%c' unless (defined $args{date_format_display});
+        $args{date_format_return} = '%c' unless (defined $args{date_format_return});
 
         # convert any default value(s) to epoch seconds
         if (defined $args{default}) {
@@ -517,6 +559,227 @@ sub process_args {
 
     return \%args
 }
+
+sub new_check {
+    shift;
+    my $return;
+
+    # get the one or more checks being passed in
+    my $raw_checks = shift || die "No check was provided to the new_check constructor";
+    if (@_) {
+        die "the new_check constructor accepts only one argument, you passed ", (scalar @_)+1;
+    }
+
+    my @check_objects;
+
+
+    my $add_check_object = sub {
+        my $check = shift;
+        my $err_msg = shift;
+
+        my $href;
+        $href->{check} = $check;
+        $href->{check_type} = _classify_check_type( $href->{check} );
+        $href->{err_msg} = $err_msg if defined $err_msg;
+
+        push @check_objects, bless $href => '_check_object';
+    };
+
+    my $process_aref = sub {
+        my $aref = shift;
+
+        # []
+        if (scalar @$aref == 0) {
+            die "the new_check constructor recieved an empty aref inside another aref!";
+
+        # [ ^ ]  -- if only 1 elem it must be a check
+        } elsif (scalar @$aref == 1) {
+            $add_check_object->( $aref->[0] );
+
+        # [ ^,^ ]
+        } elsif (scalar @$aref == 2) {
+            # if the first elem is a check
+            my $check_type;
+            eval { $check_type = _classify_check_type( $aref->[0] ) };
+            if ($check_type) {
+                if (ref $aref->[1]) {
+                    die "the new_check constructor recieved a ref in place of a string error message!";
+                }
+                $add_check_object->( $aref->[0], $aref->[1] );
+
+            # else this is a 2 element aref check
+            } else {
+                # this is a list_check, so all elements of @{ $aref } must be non-refs
+                for (@{ $aref }) {
+                    if (ref) {
+                        die "the new_check constructor recieved what was evaluated to be a list_check, but one of its elements was a ref!";
+                    }
+                }
+                $add_check_object->( $aref );
+            }
+
+        # [ ^,^,^,... ]
+        } elsif (scalar @$aref > 2) {
+            # this is a list_check, so all elements of @{ $aref } must be non-refs
+            for (@{ $aref }) {
+                if (ref) {
+                    die "the new_check constructor recieved what was evaluated to be a list_check, but one of its elements was a ref!";
+                }
+            }
+            $add_check_object->( $aref );
+
+        }
+    };
+
+    my $process_1_elem = sub {
+        my $elem = shift;
+        my $ref = ref $elem;
+
+        if ($ref eq 'ARRAY') {
+            $process_aref->( $elem );
+
+        } elsif ($ref eq '_check_object') {
+            push @check_objects, $elem;
+
+        } elsif (! $ref or $ref eq 'Regexp') {
+            $add_check_object->( $elem );
+
+        } else {
+            die "the new_check constructor accepts only one scalar, aref, regex_ref, or check object argument";
+
+        }
+    };
+
+
+    # aref.
+    if (ref $raw_checks eq 'ARRAY') {
+        # []
+        if (scalar @$raw_checks == 0) {
+            die "the new_check constructor recieved an aref, but it was empty!";
+
+        # [ ^ ]  -- just one element in the aref
+        } elsif (scalar @$raw_checks == 1) {
+            $process_1_elem->( $raw_checks->[0] );
+
+        # [ ^,^ ]  -- either a list check or one check and an error msg
+        } elsif (scalar @$raw_checks == 2) {
+            if (ref $raw_checks->[0] eq '_check_object' or ref $raw_checks->[1] eq '_check_object') {
+                $process_1_elem->( $raw_checks->[0] );
+                $process_1_elem->( $raw_checks->[1] );
+
+            } else {
+                my $check_type_2nd_elem = eval { _classify_check_type( $raw_checks->[1] ) };
+
+                # if 2nd elem is a check, so must the 1st be
+                if ($check_type_2nd_elem) {
+                    $process_1_elem->( $raw_checks->[0] );
+                    $process_1_elem->( $raw_checks->[1] );
+
+                # since the 2nd elem does not look like a check, either we
+                # have a [check, err] list or a valid values aref with only 2 elems
+                } else {
+                    $process_1_elem->( $raw_checks );
+
+                }
+            }
+
+        # [ ^,^,^... ]  -- more than 2 elements, ergo must have multiple checks or be one list_check
+        } else {
+            my $found_ref;
+            for (@$raw_checks) {
+                if (ref) {
+                    $found_ref++;
+                    last;
+                }
+            }
+
+            if ($found_ref) {
+                # process each elem as a check
+                for (@$raw_checks) {
+                    $process_1_elem->( $_ );
+                }
+
+            # simple list_check
+            } else {
+                $process_1_elem->( $raw_checks );
+
+            }
+        }
+
+    # non-aref
+    } else {
+        $process_1_elem->( $raw_checks );
+
+    }
+
+    # return either an aref of check objects, or one check
+    # object by itself if there was only one
+    return $#check_objects ? [@check_objects] : $check_objects[0];
+}
+
+# private function, not a method
+sub _classify_check_type {
+    my $try = shift;
+
+    if (ref $try eq 'CODE') {
+        return 'custom_check';
+    } elsif (ref $try eq 'ARRAY') {
+        return 'list_check';
+    } elsif (ref $try eq 'Regexp') {
+        return 'regex_check';
+    } elsif (!ref $try and $try =~ /\s*SELECT\s+/i) {
+        return 'sql_check';
+    } elsif (!ref $try) {
+        if ($try =~/^\s*(lt|gt|le|ge|eq|ne|cmp|<=>|<=|>=|==|!=|<|>)\s*/) {
+            return 'compare_check';
+        }
+        elsif
+        (
+            grep /^$try$/ => qw'
+                                -r -w -x
+                                -R -W -X
+                                -o -O
+                                -e -z
+                                -s
+                                -f -d
+                                -l -S -p
+                                -b -c
+                                -u -g -k
+
+                                -T -B
+                                -M -A -C
+                               '
+        )
+        {
+            return 'filetest_check';
+        }
+    }
+
+    die "'$try' is of an unrecognizable check type!"
+}
+
+# allow setting if individual parms, ala:
+#    $ui->dbh( $dbh );
+# or getting of individual parm values, ala:
+#    print $ui->dbh;
+sub AUTOLOAD {
+    return if our $AUTOLOAD =~ /::DESTROY$/;
+    $AUTOLOAD =~ s/.*:://;  # trim the package name
+    my $self = shift;
+
+    if (exists $self->{$AUTOLOAD}) {
+        if (@_) {
+            if ($#_) { die "Only one value may passed for setting parm values!" }
+            return $self->{$AUTOLOAD} = $_[0];
+        } else {
+            return $self->{$AUTOLOAD};
+        }
+    } else {
+        die "\$self->$AUTOLOAD( @_ ) was called, yet no parameter named $AUTOLOAD currently exists!";
+    }
+
+}
+
 
 sub get {
     # # multiple parms
@@ -555,6 +818,19 @@ sub get {
         my $parm = $self->process_args( $_ );
         bless $parm => ref($self);
 
+        unless ($parm->{interact}) {
+            die 'Interact mode is off, yet there is no default set for parm: ' .
+                (defined $parm->{name} ? $parm->{name} : '[no name recorded]') .
+                '!'
+                unless defined $parm->{default};
+            my $default = (ref $parm->{default} eq 'ARRAY') ? $parm->{default} : [$parm->{default}];
+            if (defined $parm->{type} and $parm->{type} eq 'date') {
+                $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$default;
+            }
+            push @return, ($#{$default}) ? $default : $default->[0];
+            next;
+        }
+
         my $OUT = $parm->{FH_OUT};
         my $IN  = $parm->{FH_IN};
 
@@ -582,29 +858,33 @@ sub get {
             }
         }
 
+        print $OUT $parm->{menu} if $parm->{menu};
+
         # $w_ vars contain word strings to be combined later into appropriate prompts
-        my $w_default;
-        my $w_value_values = 'value';
+        my $w_default = '';
+        my $w_value_values = '';
 
         if (defined $parm->{msg}) {
-            print $OUT  autoformat
-                        (
-                            $parm->interpolate
+            if ($parm->{msg} ne '') {
+                my $msg = $parm->{msg};
+                $msg =~ s/^\n+//;
+                print $OUT  ("\n" x $parm->{msg_newline}),
+                            autoformat
                             (
-                                $parm->{msg},
-                                defined $parm->{default}
-                                  ? $parm->{default}
-                                  : ()
-                            ),
-                            {all => 1, right => $parm->{term_width}}
-                        )
-                        if ($parm->{msg});
+                                $parm->interpolate
+                                (
+                                    $parm->{msg},
+                                    defined $parm->{default}
+                                      ? $parm->{default}
+                                      : ()
+                                ),
+                                $parm->_get_autoformat_args({left=>$parm->{msg_indent}})
+                            );
+            }
         } else {
             # This is the default message format
             #
             # [Name: ][The default value/values is/are LIST_HERE.  ]Enter a value[ or list of values delimited with DELIMITER_DESC_HERE][ (use the word NULL to indicate a null value/any null values)].
-
-            my $msg;
 
             # set up words
             my $name = (defined $parm->{name}) ? "$parm->{name}: " : '';
@@ -620,7 +900,7 @@ sub get {
                     if (ref $parm->{default} eq 'ARRAY') {
                         my @defaults;
                         if(defined $parm->{type} and $parm->{type} eq 'date') {
-                            push @defaults, UnixDate("epoch $_",$parm->{date_format}) for @{ $parm->{default} };
+                            push @defaults, UnixDate("epoch $_",$parm->{date_format_display}) for @{ $parm->{default} };
                         } else {
                             push @defaults, @{ $parm->{default} };
                         }
@@ -638,6 +918,8 @@ sub get {
                             $w_default = $parm->{default};
                         }
                     }
+                } else {
+                    $w_value_values = 'value';
                 }
 
                 $default =  "The default $w_value_values $w_is_are $w_default.  Press ENTER to accept the default, or ";
@@ -654,10 +936,10 @@ sub get {
                 $use_NULL_use_NULLs = ' (use the word NULL to indicate any null values)' if ($parm->{allow_null});
             }
 
-            print $OUT autoformat(
-                $name . $default . $enter . $or_list_of_values . $use_NULL_use_NULLs . '.',
-                {all=>1, right=>$parm->{term_width}}
-            );
+            my $msg = $name . $default . $enter . $or_list_of_values . $use_NULL_use_NULLs . '.';
+
+            print $OUT ("\n" x $parm->{msg_newline}),
+                       autoformat( $msg, $parm->_get_autoformat_args({left=>$parm->{msg_indent}}) );
         }
 
 
@@ -667,8 +949,9 @@ sub get {
 
         PROMPT:
         until ($ok) {
-            if ($parm->{maxtries} and $i++ > $parm->{maxtries}) {
-                die "You have exceeded the maximum number of allowable tries";
+            $i++;
+            if ($parm->{maxtries} and $i > $parm->{maxtries}) {
+                die "You have exceeded the maximum number of allowable tries\n";
             }
 
             my $prompt;
@@ -682,10 +965,10 @@ sub get {
             if ($i > 1) {
                 $prompt = (defined $parm->{re_prompt}) ? $parm->{re_prompt} : $parm->{prompt};
                 $get_endspace->($prompt);
-                $prompt =  autoformat( $prompt, {all=>1, left=>4, right=>$parm->{term_width}} );
+                $prompt = autoformat( $prompt, $parm->_get_autoformat_args({left=>$parm->{prompt_indent}}) );
             } else {
                 $get_endspace->( $parm->{prompt} );
-                $prompt = autoformat( $parm->{prompt}, {all=>1, left=>4, right=>$parm->{term_width}} );
+                $prompt = autoformat( $parm->{prompt}, $parm->_get_autoformat_args({left=>$parm->{prompt_indent}}) );
             }
             chomp $prompt;
             $prompt .= $endspace;
@@ -723,21 +1006,31 @@ sub get {
                     if (defined $parm->{min_elem}) {
                         if (scalar @$stdin < $parm->{min_elem}) {
                             my $elements = $parm->{min_elem} > 1 ? 'elements' : 'element';
-                            print $OUT "You must specify at least $parm->{min_elem} $elements in your '$delimiter' delimited list\n";
+                            print $OUT autoformat(
+                                                    "You must specify at least $parm->{min_elem} $elements in your '$delimiter' delimited list",
+                                                    $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                                                 );
                             next PROMPT;
                         }
                     }
                     if (defined $parm->{max_elem}) {
                         if (scalar @$stdin > $parm->{max_elem}) {
                             my $elements = $parm->{max_elem} > 1 ? 'elements' : 'element';
-                            print $OUT "You may specify at most $parm->{max_elem} $elements in your '$delimiter' delimited list\n";
+                            print $OUT autoformat(
+                                                    "You may specify at most $parm->{max_elem} $elements in your '$delimiter' delimited list",
+                                                    $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                                                 );
                             next PROMPT;
                         }
                     }
                     if (defined $parm->{unique_elem} and $parm->{unique_elem}) {
                         my %saw;
                         if ( scalar grep(!$saw{$_}++, @$stdin) != scalar @$stdin ) {
-                            print $OUT "Each element of the '$delimiter' delimited list must be unique.\n";
+                            print $OUT autoformat(
+                                                    "Each element of the '$delimiter' delimited list must be unique.\n",
+                                                    $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                                                 );
+
                             next PROMPT;
                         }
                     }
@@ -767,7 +1060,7 @@ sub get {
                                 $_ = $time;
                             } else {
                                 $_ = $parm->{echo_quote} . $_ . $parm->{echo_quote} if ($parm->{echo_quote});
-                                print $OUT autoformat("$_ is not a valid date",{left=>4, right=>$parm->{term_width}});
+                                print $OUT autoformat("$_ is not a valid date",$parm->_get_autoformat_args({left=>$parm->{prompt_indent}}));
                                 next PROMPT;
                             }
                         }
@@ -799,8 +1092,13 @@ sub get {
                     next PROMPT unless (
                         $confirm->(
                             autoformat(
-                                "You accepted the default $w_value_values: $w_default.  Is this correct? (Y|n) ",
-                                {all=>1, left=>4, right=>$parm->{term_width}}
+                                (
+                                    'You accepted the default'
+                                    . ($w_value_values ? " $w_value_values" : '')
+                                    . ($w_default ? ": $w_default" : '')
+                                    . '.  Is this correct? (Y|n) '
+                                ),
+                                $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
                             )
                         )
                     );
@@ -808,7 +1106,7 @@ sub get {
                 } else {
                     my @confirm;
                     if (defined $parm->{type} and $parm->{type} eq 'date') {
-                        push @confirm, UnixDate("epoch $_", $parm->{date_format}) for (@$stdin);
+                        push @confirm, UnixDate("epoch $_", $parm->{date_format_display}) for (@$stdin);
                     } else {
                         @confirm = @$stdin;
                     }
@@ -825,7 +1123,7 @@ sub get {
                                 (defined $delimiter) ? join("$delimiter " => @confirm) : $confirm[0]
                                 ) .
                                 ".  Is this correct? (Y|n) ",
-                                {all=>1, left=>4, right=>$parm->{term_width}}
+                                $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
                             )
                         )
                     );
@@ -835,17 +1133,13 @@ sub get {
             }
 
             if (ref $stdin or $stdin ne '') {
-                for (@{$parm->{ordered_checks}}) {
-                    my @parms = ();
-                    push @parms, (date_format_return => '%s') if (defined $parm->{type} and $parm->{type} eq 'date');
-                    if (/custom_check/) {
-                        $return = $parm->{$_}->($stdin, @parms);
-                        next PROMPT unless defined $return;
-                    } else {
-                        push @parms, (cache_sql_results => 1) if (/sql_check/);
-                        $return = $parm->$_($stdin, @parms);
-                        next PROMPT unless defined $return;
+                if ($parm->{check}) {
+                    my @validate_args = ($stdin);
+                    if (defined $parm->{type} and $parm->{type} eq 'date') {
+                        push @validate_args, (date_format_return => '%s');
                     }
+                    $return = $parm->validate( @validate_args );
+                    next PROMPT unless defined $return;
                 }
             }
 
@@ -857,33 +1151,239 @@ sub get {
             $ok = 1;
         }
 
+        $return = $parm->translate( $return );
+
         if (defined $parm->{type} and $parm->{type} eq 'date') {
-            if (defined $parm->{date_format_return}) {
-                $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$return;
-            }
+            $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$return;
         }
 
         # calling program determines whether an aref or scalar is returned via the delimiter parm
         push @return, ((defined $delimiter) ? $return : $return->[0]);
     }
 
-    return $#parms ? @return : $return [0];
+    return $#parms ? @return : $return[0];
 
 }
 
-sub regex_check {
+sub validate {
     my $self = shift;
-    my $aref = shift;
+    my $data = shift;
+
+    # While the get method will only call validate with data, another
+    # program might want to validate data that it does not realize is
+    # undefined.  In that case we'll take a shortcut and just return 0.
+    return 0 unless defined $data;
+
+    my $parm;
+    my $return;
+
+    if (exists $self->{check}) {
+        $parm = $self;
+
+    # if no $self->{check} exists, then this method was called by the
+    # invocant script
+    } else {
+        # demand a check parm in the passed in parms
+        unless (grep /^check$/ => @_) {
+            die "The validate method was invoked without a check parm either in \$self or in the passed in parms!";
+        }
+        $parm = $self->process_args( @_ );
+        bless $parm => ref($self);
+    }
+
+    CONFIRM_CHECK_OBJ:
+    # for each check object
+    for
+    (
+        ref $parm->{check} eq 'ARRAY'
+        ? @{ $parm->{check} }
+        :  ( $parm->{check} )
+    )
+    {
+        unless (ref eq '_check_object') {
+            $parm->{check} = $parm->new_check( $parm->{check} );
+            last CONFIRM_CHECK_OBJ;
+        }
+    }
+
+
+    # $self->{check} is either an aref of multiple check
+    # objects, or just one check object by itself
+    for
+    (
+        ref $parm->{check} eq 'ARRAY'
+        ? @{ $parm->{check} }
+        :  ( $parm->{check} )
+    )
+    {
+        my $check_type = $_->{check_type};
+        if ($check_type eq 'custom_check') {
+            # if invocant specified a custom check, then they must
+            # have built in a coderef for our use at this point
+            $return = $_->{check}->($data, @_);
+        } else {
+            # ensure there exists a method named the same as check_type
+            unless ($parm->can( $check_type )) {
+                die "You tried to invoke a check named $check_type, but no method of that name exists.  Did you forget to code the method?";
+            }
+
+            # use the method named the same as check_type, passing our
+            # current check_type and check object in as a key=>value  pair
+            $return = $parm->$check_type(
+                $data,
+                $check_type => $_,
+                @_,
+            );
+            last unless defined $return;
+        }
+    }
+
+    return $return;
+}
+
+sub translate {
+    my $self = shift;
+    my $data = shift;
+
+    return $data unless $self->{translate};
+
+    unless (ref $self->{translate} eq 'ARRAY') {
+        die "the value for the translate parameter must be an aref";
+    }
+
+    for my $data (@$data) {
+        for (@{ $self->{translate} }) {
+            # ensure translate parm has the requisite two elements
+            unless (ref eq 'ARRAY' and scalar @$_ == 2) {
+                die "each translate parameter must be an aref with exactly 2 elements";
+            }
+
+            # instantiate a new obj with $_->[0] as the check
+            my $parm = $self->process_args( check => $_->[0] );
+            bless $parm => ref($self);
+
+            if ($parm->validate( $data )) {
+                if ( $data eq 'NULL' ) {
+                    # At invocant request, check methods will sometimes validate a
+                    # data string of 'NULL' even though that string really doesn't
+                    # match the privided check criteria.
+                    if (defined $parm->{allow_null} and $parm->{allow_null}) {
+
+                        # unless $_->[0] explicitely names 'NULL' we
+                        # will move on to the next $data instead of
+                        # translating this one
+                        if ( ref $_->[0] eq 'ARRAY') {
+                            next unless grep /NULL/ => @{$_->[0]};
+
+                        } elsif (!ref $_->[0]) {
+                            next unless $_->[0] =~ /\s*==\s*NULL$/;
+
+                        } else {
+                            next;
+
+                        }
+                    }
+                }
+
+                # translate $data
+                $data = $_->[1];
+            }
+        }
+    }
+
+    return $data;
+}
+
+sub filetest_check {
+    my $self = shift;
+    my $data = shift;
     my $parm = $self->process_args( @_ );
     bless $parm => ref($self);
 
     my $OUT = $parm->{FH_OUT};
 
-    die "regex_check was invoked, but no regex_check-specific information was found!" unless (defined $parm->{regex_check});
+    unless (defined $parm->{filetest_check}) {
+        die "filetest_check was invoked, but no filetest_check-specific information was found!";
+    }
 
-    unless (ref $aref eq 'ARRAY') {
-        die "First arg to regex_check must be aref or scalar" if (ref $aref);
-        $aref = [ $aref ];
+    unless (ref $data eq 'ARRAY') {
+        die "Data passes to filetest_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
+    }
+
+    if (defined $parm->{type} and $parm->{type} eq 'date') {
+        die "filetest_check is not a valid option in conjunction with a parm type of 'date'!";
+    }
+
+    my $qr_NULL = (defined $parm->{allow_null} and $parm->{allow_null})
+                ? qr/^NULL$/i
+                : '';
+
+    my $check = sub {
+        my $try = shift;
+        return 1 if ($qr_NULL and $try =~ /$qr_NULL/);
+
+        if ($parm->{filetest_check}->{check} eq '-r') { return 1 if -r $try }
+        if ($parm->{filetest_check}->{check} eq '-w') { return 1 if -w $try }
+        if ($parm->{filetest_check}->{check} eq '-x') { return 1 if -x $try }
+        if ($parm->{filetest_check}->{check} eq '-R') { return 1 if -R $try }
+        if ($parm->{filetest_check}->{check} eq '-W') { return 1 if -W $try }
+        if ($parm->{filetest_check}->{check} eq '-X') { return 1 if -X $try }
+        if ($parm->{filetest_check}->{check} eq '-o') { return 1 if -o $try }
+        if ($parm->{filetest_check}->{check} eq '-O') { return 1 if -O $try }
+        if ($parm->{filetest_check}->{check} eq '-e') { return 1 if -e $try }
+        if ($parm->{filetest_check}->{check} eq '-z') { return 1 if -z $try }
+        if ($parm->{filetest_check}->{check} eq '-s') { return 1 if -s $try }
+        if ($parm->{filetest_check}->{check} eq '-f') { return 1 if -f $try }
+        if ($parm->{filetest_check}->{check} eq '-d') { return 1 if -d $try }
+        if ($parm->{filetest_check}->{check} eq '-l') { return 1 if -l $try }
+        if ($parm->{filetest_check}->{check} eq '-S') { return 1 if -S $try }
+        if ($parm->{filetest_check}->{check} eq '-p') { return 1 if -p $try }
+        if ($parm->{filetest_check}->{check} eq '-b') { return 1 if -b $try }
+        if ($parm->{filetest_check}->{check} eq '-c') { return 1 if -c $try }
+        if ($parm->{filetest_check}->{check} eq '-u') { return 1 if -u $try }
+        if ($parm->{filetest_check}->{check} eq '-g') { return 1 if -g $try }
+        if ($parm->{filetest_check}->{check} eq '-k') { return 1 if -k $try }
+        if ($parm->{filetest_check}->{check} eq '-T') { return 1 if -T $try }
+        if ($parm->{filetest_check}->{check} eq '-B') { return 1 if -B $try }
+        if ($parm->{filetest_check}->{check} eq '-M') { return 1 if -M $try }
+        if ($parm->{filetest_check}->{check} eq '-A') { return 1 if -A $try }
+        if ($parm->{filetest_check}->{check} eq '-C') { return 1 if -C $try }
+
+        if (defined $parm->{filetest_check}->{err_msg}) {
+            print $OUT
+            (
+                autoformat(
+                            $parm->interpolate($parm->{filetest_check}->{err_msg},$try,$parm->{filetest_check}->{check}),
+                            $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                          )
+            );
+        }
+        return 0;
+    };
+
+    for (@$data) {
+        return undef unless $check->( $_ );
+    }
+
+    return $data;
+}
+
+sub regex_check {
+    my $self = shift;
+    my $data = shift;
+    my $parm = $self->process_args( @_ );
+    bless $parm => ref($self);
+
+    my $OUT = $parm->{FH_OUT};
+
+    unless (defined $parm->{regex_check}) {
+        die "regex_check was invoked, but no regex_check-specific information was found!";
+    }
+
+    unless (ref $data eq 'ARRAY') {
+        die "Data passes to regex_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
     }
 
     if (defined $parm->{type} and $parm->{type} eq 'date') {
@@ -895,131 +1395,132 @@ sub regex_check {
                 : '';
 
     my $check = sub {
-        my ($try,$regex) = (shift,shift);
-        my $err_msg = (@_) ? shift : '';
+        my $try = shift;
         return 1 if ($qr_NULL and $try =~ /$qr_NULL/);
-        return 1 if ($try =~ /$regex/);
-        print $OUT ( autoformat( $parm->interpolate($err_msg,$try,$regex), {all=>1, left=>4, right=>$parm->{term_width}} ) ) if ($err_msg);
-        return undef;
+        return 1 if ($try =~ /$parm->{regex_check}->{check}/);
+        if (defined $parm->{regex_check}->{err_msg}) {
+            print $OUT
+            (
+                autoformat(
+                            $parm->interpolate($parm->{regex_check}->{err_msg},$try,$parm->{regex_check}->{check}),
+                            $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                          )
+            );
+        }
+        return 0;
     };
 
-    for (@$aref) {
-        if (ref $parm->{regex_check} eq 'ARRAY') {
-            if (
-                scalar @{ $parm->{regex_check} } == 2
-                    and
-                ref $parm->{regex_check}->[0] eq 'Regexp'
-                    and
-                !ref $parm->{regex_check}->[1]
-               ){
-                return undef unless $check->( $_, @{ $parm->{regex_check} } );
-            } else {
-                for my $regex (@ {$parm->{regex_check} }) {
-                    if (ref $regex eq 'ARRAY') {
-                        die "Invalid number of elements in regex_check aref" if ($#{$regex} != 1);
-                        die "Not a regex: " . $regex->[0] unless (ref $regex->[0] eq 'Regexp');
-                        die "Not a vaild regex_check error message: " . $regex->[1] unless (!ref $regex->[1]);
-                        return undef unless $check->( $_, @$regex );
-                    } else {
-                        die "Not a regex: $regex" unless (ref $regex eq 'Regexp');
-                        return undef unless /$regex/;
-                    }
-                }
-            }
-        } else {
-            die "Not a regex: " . $parm->{regex_check} unless (ref $parm->{regex_check} eq 'Regexp');
-            return undef unless $check->( $parm, $_, $parm->{regex_check} );
-        }
+    for (@$data) {
+        return undef unless $check->( $_ );
     }
 
     if (defined $parm->{type} and $parm->{type} eq 'date') {
-        if (defined $parm->{date_format_return}) {
-            $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$aref;
-        }
+        $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$data;
     }
 
-    return $aref;
+    return $data;
 }
 
 
 sub sql_check {
     my $self = shift;
-    my $aref = shift;
+
+    my $data = shift;
     my $parm = $self->process_args( @_ );
     bless $parm => ref($self);
 
-    die "sql_check was invoked, but no sql_check-specific information was found!" unless (defined $parm->{sql_check});
-
-    unless (ref $aref eq 'ARRAY') {
-        die "First arg to sql_check must be aref or scalar" if (ref $aref);
-        $aref = [ $aref ];
+    unless (defined $parm->{sql_check}) {
+        die "sql_check was invoked, but no sql_check-specific information was found!";
     }
 
-    my $dbh;
-    die "value for sql_check must be an aref!" unless (ref $parm->{sql_check} eq 'ARRAY');
-    for (@{ $parm->{sql_check} }) {
-        # first element must be $dbh
-        unless (defined $dbh) {
-            $dbh = $_;
-            die "No database handle was provided!" unless (ref $dbh and $dbh->can( 'trace' ));
-        }
+    unless (ref $data eq 'ARRAY') {
+        die "First arg to sql_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
+    }
 
-        if (ref eq 'ARRAY') {
-            # unless we already looked up the values
-            if (!ref $_->[0] and $_->[0] =~ /^\s*SELECT/io) {
-                die "Invalid number of elements in sql_check aref" if ($#{$_} != 1);
-                die "Invalid err_msg" unless (defined $_->[1] and !ref $_->[1]);
-                $_->[0] = $dbh->selectcol_arrayref( $_->[0] ) or die "This SQL statement did not return any rows: $_->[0]";
-                if (defined $parm->{type} and $parm->{type} eq 'date') {
-                    for (@{$_->[0]}) {
-                        my $epoch_seconds = 'epoch ' . UnixDate($parm->{date_preprocess}->($_),'%s') or die "Could not recognize $_ as a date!";
-                        $_ = $epoch_seconds;
-                    }
-                }
-            }
-        } else {
-            if (!ref $_ and $_ =~ /^\s*SELECT/io) {
-                $_ = $dbh->selectcol_arrayref( $_ ) or die "This SQL statement did not return any rows: $_";
-                if (defined $parm->{type} and $parm->{type} eq 'date') {
-                    for ( @$_ ) {
-                        my $epoch_seconds = 'epoch ' . UnixDate($parm->{date_preprocess}->($_),'%s') or die "Could not recognize $_ as a date!";
-                        $_ = $epoch_seconds;
-                    }
-                }
-            }
+    unless ($parm->{dbh}) {
+        die "No database handle was passed to sql_check!";
+    }
+
+    # get an aref of values from the database
+    my $list = $parm->{dbh}->selectcol_arrayref( $parm->{sql_check}->{check} )
+        or die "This SQL statement did not return any rows: $parm->{sql_check}->{check}";
+
+    if (defined $parm->{type} and $parm->{type} eq 'date') {
+        for (@$list) {
+            my $epoch_seconds = 'epoch ' . UnixDate($parm->{date_preprocess}->($_),'%s')
+                or die "Could not recognize $_ as a date!";
+            $_ = $epoch_seconds;
         }
     }
-    # if requested, store our revised sql_check value in
-    # $self to avoid another database lookup next time.
-    $self->{sql_check} = $parm->{sql_check} if (defined $parm->{cache_sql_results} and $parm->{cache_sql_results});
 
-                                                   # let's leave out the $dbh, it's not wanted by list_check
-    my $return = $parm->list_check( $aref, list_check => [ @{ $parm->{sql_check} }[1..$#{ $parm->{sql_check} }] ] );
-    return $return;
+    # create a new list_check
+    my $new_check = $parm->new_check(
+                                        [
+                                            $list,
+                                            $parm->{sql_check}->{err_msg}
+                                              ? $parm->{sql_check}->{err_msg}
+                                              : ()
+                                        ]
+                                    );
+
+    # The check parm of the invocant of the validate method (which in
+    # turn invoked this sql_check method) will be changed from a
+    # sql_check into a list_check.  In the case where that invocant of
+    # the validate method was the get method, for example, the returned
+    # values from this sql_check will thus be preserved until the get
+    # method finishes.
+    for
+    (
+        ref $self->{check} eq 'ARRAY'
+        ? @{ $self->{check} }
+        :  ( $self->{check} )
+    )
+    {
+        if
+        (
+            $_->{check_type} eq 'sql_check'
+              and
+            $_->{check} eq $parm->{sql_check}->{check}
+              and
+            (
+                !exists $parm->{sql_check}->{err_msg}
+                  or
+                !exists $_->{err_msg}
+                  or
+                $_->{err_msg} eq $parm->{sql_check}->{err_msg}
+            )
+        )
+        {
+            $_ = $new_check;
+            last;
+        }
+    }
+
+    # now we use the list_check method with our new check object
+    return $parm->list_check( $data, $new_check->{check_type} => $new_check );
+
 }
 
 sub list_check {
     my $self = shift;
-    my $aref = shift;
+    my $data = shift;
     my $parm = $self->process_args( @_ );
     bless $parm => ref($self);
-
     my $OUT = $parm->{FH_OUT};
 
-    die "list_check was invoked, but no list_check-specific information was found!" unless (defined $parm->{list_check});
-
-    unless (ref $aref eq 'ARRAY') {
-        die "First arg to list_check must be aref or scalar" if (ref $aref);
-        $aref = [ $aref ];
+    unless (defined $parm->{list_check}) {
+        die "list_check was invoked, but no list_check-specific information was found!";
     }
 
-    die "No list_check aref was given!" unless (defined $parm->{list_check} and ref $parm->{list_check} eq 'ARRAY');
+    unless (ref $data eq 'ARRAY') {
+        die "First arg to list_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
+    }
 
-    my $parse_date;
-    $parse_date = sub {
-        die "parse_date only accepts one parm" if $#ARGV;
-        my $list = (ref $_[0] eq 'ARRAY') ? $_[0] : [$_[0]];
-        for (@$list) {
+    # date preprocessing
+    if (defined $parm->{type} and $parm->{type} eq 'date') {
+        for (@{ $parm->{list_check}->{check} }) {
             if (/^\s*epoch\s+(\-?\d+)\s*$/io) {
                 s/.*/$1/;
             } else {
@@ -1028,161 +1529,115 @@ sub list_check {
                 $_ = $epoch_seconds;
             }
         }
-        return (ref $_[0] eq 'ARRAY') ? $list : $list->[0];
-    } if (defined $parm->{type} and $parm->{type} eq 'date');
-
-    my @lists_n_errs;
-
-    # valid input:
-    #
-    # LEVEL 1:     [ 1,2,3 ]
-    # LEVEL 2: [ [ [ 1,2,3 ], 'err' ], [ 1,2,3 ], ... ]
-
-    # if LEVEL 1
-    if ( !ref $parm->{list_check}->[0] ) {
-        $parm->{list_check} = $parse_date->( $parm->{list_check} ) if (defined $parse_date);
-        push @lists_n_errs, [ $parm->{list_check} ];
-    # if LEVEL 2
-    } else {
-        for ( @{$parm->{list_check}} ) {
-            die "invalid element" unless (ref eq 'ARRAY');
-            if (ref $_->[0] eq 'ARRAY') {
-                $_->[0] = $parse_date->( $_->[0] ) if (defined $parse_date);
-                push @lists_n_errs, $_;
-            } else {
-                $_ = $parse_date->( $_ ) if (defined $parse_date);
-                push @lists_n_errs, [ $_ ];
-            }
-        }
     }
-
     my $qr_NULL = (defined $parm->{allow_null} and $parm->{allow_null})
                 ? qr/^NULL$/i
                 : '';
 
-    for my $val (@$aref) {
+    for my $val (@$data) {
         unless ($qr_NULL and $val =~ /$qr_NULL/) {
-            for (@lists_n_errs) {
-                my ($list,$err_msg) = @$_;
-                unless (grep /^$val$/ => @$list) {
-                    print $OUT (
-                        autoformat(
-                            $parm->interpolate(
-                                $err_msg,
-                                $val,
-                                join(
-                                    (
-                                        (defined $parm->{delimiter})
-                                        ? "$parm->{delimiter} "
-                                        : ', '
-                                    ),
-                                    (
-                                        (defined $parm->{type} and $parm->{type} eq 'date')
-                                        ? map { UnixDate("epoch $_",$parm->{date_format}) } @$list
-                                        : @$list
-                                    )
+            unless (grep /^$val$/ => @{ $parm->{list_check}->{check} }) {
+                print $OUT (
+                    autoformat(
+                        $parm->interpolate(
+                            $parm->{list_check}->{err_msg},
+                            $val,
+                            join(
+                                (
+                                    (defined $parm->{delimiter})
+                                    ? "$parm->{delimiter} "
+                                    : ', '
+                                ),
+                                (
+                                    (defined $parm->{type} and $parm->{type} eq 'date')
+                                    ? map { UnixDate("epoch $_",$parm->{date_format_display}) } @{ $parm->{list_check}->{check} }
+                                    : @{ $parm->{list_check}->{check} }
                                 )
-                            ),
-                            {all=>1, left=>4, right=>$parm->{term_width}}
-                        )
-                    ) if (defined $err_msg);
-                    return undef;
-                }
+                            )
+                        ),
+                        $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                    )
+                ) if (defined $parm->{list_check}->{err_msg});
+                return undef;
             }
         }
     }
 
     if (defined $parm->{type} and $parm->{type} eq 'date') {
-        if (defined $parm->{date_format_return}) {
-            $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$aref;
-        }
+        $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$data;
     }
-    return $aref;
+    return $data;
 }
 
 sub compare_check {
     my $self = shift;
-    my $aref = shift;
+    my $data = shift;
     my $parm = $self->process_args( @_ );
     bless $parm => ref($self);
 
     my $OUT = $parm->{FH_OUT};
 
-    die "compare_check was invoked, but no compare_check-specific information was found!" unless (defined $parm->{compare_check});
+    unless (defined $parm->{compare_check}) {
+        die "compare_check was invoked, but no compare_check-specific information was found!";
+    }
 
-    unless (ref $aref eq 'ARRAY') {
-        die "First arg to compare_check must be aref or scalar" if (ref $aref);
-        $aref = [ $aref ];
+    unless (ref $data eq 'ARRAY') {
+        die "First arg to compare_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
     }
 
     my $qr_cmp = qr/^(\s*(lt|gt|le|ge|eq|ne|cmp|<=>|<=|>=|==|!=|<|>)\s*)/;
     my $qr_numeric = qr/^([+-]?)(?=\d|\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?$/;  # from perlfaq
 
-    my @checks;
-    for (@{$parm->{compare_check}}) {
-        my $err_msg = '';
-        my $cmp_val;
-        if (ref $_ eq 'ARRAY') {
-            die "Invalid number of elements in compare_check aref" if ($#{$_} != 1);
-            ($cmp_val,$err_msg) =  @$_;
-        } else {
-            $cmp_val = $_;
-        }
-        my $orig_cmp_val = $cmp_val;
-        # match and cut comparison operator from front of string
-        $cmp_val =~ s/$qr_cmp//;
-        # capture matched comparison operator
-        my $cmp = $2;
+    my $cmp_val = $parm->{compare_check}->{check};
+    # match and cut comparison operator from front of string
+    $cmp_val =~ s/$qr_cmp//;
+    # capture matched comparison operator
+    my $cmp = $2;
 
-        if ($cmp eq '<=>' or $cmp eq 'cmp') {
-            die "$cmp is not an acceptable comparison operator for the compare_check method!";
-        }
-
-        if (defined $parm->{type} and $parm->{type} eq 'date') {
-            my $epoch_seconds = UnixDate($parm->{date_preprocess}->($cmp_val),'%s') or die "Could not recognize comparison value $cmp_val as a date!";
-            $cmp_val = $epoch_seconds;
-            # as we're keeping track of this comparison check for possible use by an error message, let's conform
-            # it to the desired formatting.
-            $orig_cmp_val = "$cmp " . UnixDate("epoch $epoch_seconds", $parm->{date_format});
-        }
-        push @checks, [$cmp, $cmp_val, $orig_cmp_val, $err_msg];
+    if ($cmp eq '<=>' or $cmp eq 'cmp') {
+        die "$cmp is not an unsupported comparison operator for the compare_check method!";
     }
 
-    for my $val (@$aref) {
-        for (@checks) {
-            my ($cmp, $cmp_val, $orig_cmp_val, $err_msg) = @$_;
-            if ($cmp =~ /(<|>|<=|>=|==|!=)/) {
-                if ($val =~ /$qr_numeric/) {
-                    if    ($cmp eq '<'  ) { unless ($val <   $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    elsif ($cmp eq '>'  ) { unless ($val >   $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    elsif ($cmp eq '<=' ) { unless ($val <=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    elsif ($cmp eq '>=' ) { unless ($val >=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    elsif ($cmp eq '==' ) { unless ($val ==  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    elsif ($cmp eq '!=' ) { unless ($val !=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                    else                  { die "Unknown comparison operator: $cmp" }
-                } else {
-                    print $OUT ( autoformat("'$val' is not numeric.", {all=>1, left=>4, right=>$parm->{term_width}}) );
-                    return undef;
-                }
-            } else {
-                if    ($cmp eq 'lt' ) { unless ($val lt  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                elsif ($cmp eq 'gt' ) { unless ($val gt  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                elsif ($cmp eq 'le' ) { unless ($val le  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                elsif ($cmp eq 'ge' ) { unless ($val ge  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                elsif ($cmp eq 'eq' ) { unless ($val eq  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
-                elsif ($cmp eq 'ne' ) { unless ($val ne  $cmp_val) { print $OUT ( autoformat($parm->interpolate($err_msg,$val,$orig_cmp_val),{all=>1, left=>4, right=>$parm->{term_width}}) ) if ($err_msg); return undef; } }
+    if (defined $parm->{type} and $parm->{type} eq 'date') {
+        my $epoch_seconds = UnixDate($parm->{date_preprocess}->($cmp_val),'%s')
+            or die "Could not recognize comparison value $cmp_val as a date!";
+        $cmp_val = $epoch_seconds;
+        # as we're keeping track of this comparison check for possible use by an error message, let's conform
+        # it to the desired formatting.
+        $parm->{compare_check}->{check} = "$cmp " . UnixDate("epoch $epoch_seconds", $parm->{date_format_display});
+    }
+
+    for my $val (@$data) {
+        if ($cmp =~ /(<|>|<=|>=|==|!=)/) {
+            if ($val =~ /$qr_numeric/) {
+                if    ($cmp eq '<'  ) { unless ($val <   $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+                elsif ($cmp eq '>'  ) { unless ($val >   $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+                elsif ($cmp eq '<=' ) { unless ($val <=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+                elsif ($cmp eq '>=' ) { unless ($val >=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+                elsif ($cmp eq '==' ) { unless ($val ==  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+                elsif ($cmp eq '!=' ) { unless ($val !=  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
                 else                  { die "Unknown comparison operator: $cmp" }
+            } else {
+                print $OUT ( autoformat("'$val' is not numeric.", $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) );
+                return undef;
             }
+        } else {
+            if    ($cmp eq 'lt' ) { unless ($val lt  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            elsif ($cmp eq 'gt' ) { unless ($val gt  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            elsif ($cmp eq 'le' ) { unless ($val le  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            elsif ($cmp eq 'ge' ) { unless ($val ge  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            elsif ($cmp eq 'eq' ) { unless ($val eq  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            elsif ($cmp eq 'ne' ) { unless ($val ne  $cmp_val) { print $OUT ( autoformat($parm->interpolate($parm->{compare_check}->{err_msg},$val,$parm->{compare_check}->{check}),$parm->_get_autoformat_args({left=>$parm->{prompt_indent}})) ) if ($parm->{compare_check}->{err_msg}); return undef; } }
+            else                  { die "Unknown comparison operator: $cmp" }
         }
     }
 
     if (defined $parm->{type} and $parm->{type} eq 'date') {
-        if (defined $parm->{date_format_return}) {
-            $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$aref;
-        }
+        $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$data;
     }
 
-    return $aref;
+    return $data;
 }
 
 sub star_obscure {
@@ -1211,7 +1666,7 @@ sub format_for_display {
                ? $_[0]
                : [ $_[0] ];
     my $date_format = (defined $self->{type} and $self->{type} eq 'date')
-                      ? $self->{date_format}
+                      ? $self->{date_format_display}
                       : '';
 
     for (@$aref) {
@@ -1276,12 +1731,35 @@ sub set_TZ ($) {
     }
 }
 
+sub _get_autoformat_args {
+    my $self = shift;
+    my $addl_parm_href = shift || {};
+
+    #put the shared args into $return
+    my $return = {};
+    for (keys %{$self->{shared_autoformat_args}}) {
+        $return->{$_} = $self->{shared_autoformat_args}{$_};
+    }
+
+    # shared_autoformat_args override everything else
+    for (keys %{ $addl_parm_href }) {
+        $return->{$_} = $addl_parm_href->{$_} unless defined $return->{$_};
+    }
+
+    return $return;
+}
+
 1;
 __END__
 
 =head1 AUTHOR
 
 Term::Interact by Phil R Lawrence.
+
+=head1 SUPPORT
+
+Support is available by emailing the author directly:
+  prl ~AT~ cpan ~DOT~ org
 
 =head1 COPYRIGHT
 
@@ -1302,12 +1780,7 @@ Text::Autoformat, Term::ReadKey, Date::Manip
 
 
 FUTURE development:
-    allow for not lists?
-        - sql_check_not
-        - regex_check_not
-        - list_check_not
-        - allow for quoting of input echos
-           e.g.,
-             Tue Dec 12 00:00:00 2045 is not < Mon Dec 31 00:00:00 2001.
-               vs.
-             'Tue Dec 12 00:00:00 2045' is not < 'Mon Dec 31 00:00:00 2001'.
+
+1.  Fancy logging:  log => *FH_LOG
+2.  Instantiate and default all parms with the new() method
+    Discard any non-applicable passed-in parms

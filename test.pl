@@ -32,10 +32,21 @@ sub READLINE {
 # runnable with `make test'. After `make install' it should
 # work as `perl test.pl'
 package main;
-
 use strict;
 use Test;
-BEGIN { plan tests => 'last_test_to_print' };
+
+BEGIN {
+    my $plan_tests;
+
+    eval { require DBI };
+    if ($@) {
+        print STDERR "Could not require DBI...   will skip sql check tests\n";
+        $plan_tests = 36;
+    } else {
+        $plan_tests = 41;
+    }
+    plan tests => $plan_tests;
+ };
 
 use Term::Interact;
 ok(1); # ok so far...
@@ -45,7 +56,7 @@ tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
 
 # set up object
 my $ti = Term::Interact->new(
-    date_format         =>  '%d-%b-%Y',
+    date_format_display  =>  '%d-%b-%Y',
     date_format_return  =>  '%d-%b-%Y',
     FH_IN               =>  \*STDIN,
     FH_OUT              =>  \*STDOUT,
@@ -68,11 +79,9 @@ my $num1 = $ti->get(
     msg         => 'Enter a single digit number.',
     prompt      => 'Go ahead, make my day: ',
     re_prompt   => 'Try Again Here: ',
-    regex_check => [
-                     [
+    check       => [
                        qr/^\d$/,
                        '%s is not a single digit number!'
-                     ]
                    ]
 );
 
@@ -116,7 +125,7 @@ my $date = $ti->get (
     type          => 'date',
     name          => 'Date from 2001',
     confirm       => 1,
-    compare_check => [
+    check         => [
                        ['<= 12-31-2001', '%s is not %s.'],
                        ['>= 01/01/2001', '%s is not %s.'],
                      ]
@@ -137,11 +146,8 @@ if ( scalar @stdout == 8 ) {
 }
 ok(  $date eq '13-Feb-2001'  ? 1 : 0  );
 
-
 eval { require DBI };
-if ($@) {
-    print STDERR "Could not require DBI...   skipping sql_check tests\n";
-} else {
+unless ($@) {
     my $dbh;
     eval { $dbh = DBI->connect('','','',{RaiseError=>1}); };
     if ($@) {
@@ -157,12 +163,10 @@ if ($@) {
             prompt    => 'State: ',
             re_prompt => 'Try Again: ',
             case      => 'uc',
-            sql_check => [
-                           $dbh,
-                           [
+            dbh       => $dbh,
+            check     => [
                              "SELECT 'AZ' FROM dual",
                              '%s is not a valid state code.  Valid codes are: %s'
-                           ]
                          ]
         );
         undef @stdout;
@@ -185,7 +189,7 @@ if ($@) {
 print STDIN "$_" for @tries;
 my $num2 = $ti->get (
     name          => 'Number Less Than 10 and More than 3',
-    compare_check => [
+    check         => [
                        [' < 10', '%s is not less than 10.'],
                        ['> 3', '%s is not %s.']
                      ]
@@ -214,7 +218,7 @@ print STDIN "$_" for @tries;
 my $grades = $ti->get (
     name       => 'Letter grade',
     delimiter  => ',',
-    list_check => [ 'A', 'B', 'C', 'D', 'F' ]
+    check      => [ 'A', 'B', 'C', 'D', 'F' ]
 );
 undef @stdout;
 push @stdout, $_ while (<STDOUT>);
