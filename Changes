@@ -21,3 +21,7 @@ Revision history for Perl extension Term::Interact.
           all the check subs expect check objects, which 
           are constructed by new_check.
 
+0.42 Tue Jun 25 2002
+        - now untars correctly (into a subdirectory) instead
+          of into individual files.  :-)
+

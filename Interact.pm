@@ -441,7 +441,7 @@ use Date::Manip;
 
 use vars qw( $VERSION );
 
-$VERSION = '0.41';
+$VERSION = '0.42';
 
 sub new {
     my $class = shift;
