@@ -22,7 +22,7 @@ Term::Interact enables you to interactively get validated data from a user.  Thi
 
 =head1 EXAMPLES
 
- # set up object -- all parameters are optional
+ # set up object with some optional parameters
  my $ti = Term::Interact->new(
 
    # set desired date formatting behavior
@@ -198,10 +198,10 @@ The C<new_check> method uses a C<check> parameter value to construct one or more
 
 The C<parameters> method returns information about available parameters.  If called with no args, it will return a list of available parameter names in list context, or an href of all parameter information in scalar context:
   {
-    interact => {type => 'bool', default => 1   },
-    name     => {type => 'str',                 } ,
+    interact => {type => 'bool', default => 1             },
+    name     => {type => 'str',                           } ,
     ...
-    check    => {type => ['str','aref','qr//'], }
+    check    => {type => ['str','aref','qr//','coderef'], }
   }
 
 If called with a specific type, ala $ti->parameter(type => 'bool'), a list of parameters matching that type will be returned in list context, or an aref of parameter_name => type pairs will be returnes in scalar context.  Also note that not-types are available, ala $ti->parameter(type => '!bool').
@@ -214,7 +214,7 @@ All of the parameters are listed below in the PARAMETER section, and are all acc
 
 =head2 PARAMETERS
 
-These parameters are available for use with C<new>, where they will be stored within the constructed object.  They are also available for use with the C<get> and C<validate> methods, where they will override any values stored in the object, but only for the duration of that method call.  In other words, the parameter values stored in the object during construction will not be changed by any variant parameter values subsequently supplied to C<get> or C<validate>.  They may be changed, however, by invoking the self-named method accessor/mutators, ala $ti->timeout( 30 ).
+These parameters are available for use with C<new>, where they will be stored within the constructed object.  They are also available for use with the C<get> and C<validate> methods, where they will override any values stored in the object, but only for the duration of that method call.  In other words, the parameter values stored in the object during construction will be temporarilly overriden, but not changed by, any variant parameter values subsequently supplied to C<get> or C<validate>.  The parameter values stored in the object may be changed, however, by invoking the self-named method accessor/mutators, ala $ti->timeout( 30 ).
 
 =over 2
 
@@ -254,6 +254,10 @@ I<str>: Menu that will print prior to msg.  No formatting will be performed on t
 
 I<str>: Message that will print prior to user input prompt.  No msg will be printed if defined as 0.  If left undefined, a message will be auto-generated based on other parameter values.
 
+=item C<succinct>
+
+I<bool>: Defaults to 0.  If set to 1:  If a parm name was given, it will be used as a msg.  Otherwise the msg will be set to ''.  If a default value was provided, the default prompt will be '[default_value]> ' instead of the normal default prompt. 
+
 =item C<msg_indent>
 
 I<num>: Defaults to 0.  Number of spaces that message will be indented from the terminal's left margin when output to FH_OUT.
@@ -282,9 +286,13 @@ I<str>: If specified, the case of user input will be adjusted prior to validatio
 
 I<bool>: Defaults to 0.  The user will be prompted to confirm the input if set to 1.
 
+=item C<echo>
+
+I<bool>: Defaults to 0.  If set to 1, the get method will echo the user's validated choice to FH_OUT just prior to returning.
+
 =item C<echo_quote>
 
-I<str>: Defaults to "'" (a single quote).  When user input is echoed to the terminal, it will be quoted with whatever character string is found here, if any.
+I<str>: Defaults to "'" (a single quote).  Whenever user input is echoed to the terminal, it will be quoted with whatever character string is found here, if any.
 
 =item C<delimiter>
 
@@ -309,6 +317,10 @@ I<bool>: Set this parameter to require all elements of the user-entered delimite
 =item C<default>
 
 I<str> or I<aref>: If the user is permitted to input multiple values (i.e., you have specified a delimiter), you may specify multiple default values by passing them in an aref.  In any case you may pass in one default value as a string.
+
+=item C<check_default>
+
+I<bool>: Defaults to 0.  If the user elects to use the default value(s), those value(s) will not be validated by any specified checks unless this parameter is set to 1.
 
 =item C<date_format_display>
 
@@ -349,7 +361,7 @@ I<aref>:  Translates validated user input into something else.  Useful, for exam
 
 =item C<check>
 
-I<str, aref, qr//>:  This parameter accepts one string, one aref, or one compiled regular expression (qr//).  With these options you will be able to indicate one or more of the following kinds of checks to be used in validating data, as well as any error message you would like for each of the checks.
+I<str, aref, qr//, coderef>:  This parameter accepts one string, one aref, one compiled regular expression (qr//), or one coderef.  With these options you will be able to indicate one or more of the following kinds of checks to be used in validating data, as well as any error message you would like for each of the checks.
 
 CHECK VARIETIES
 
@@ -379,7 +391,7 @@ I<str>:  A filetest operator in string form.  Valid data is that which satisfies
 
 =item custom_check
 
-I<coderef>:  For special occasions, you can write your own custom check.  This must be a reference to a function that returns true if the data is valid.  To write your custom check function, follow the examples of the check functions in the source code of Term::Interact.
+I<coderef>:  For special occasions (or to make use of Perl's built in functions), you can write your own custom check.  This must be a reference to a function that accepts one value and returns true if that value is valid.  Example:  check => [ sub{getgrnam shift}, '%s is not a valid group' ]
 
 =back 2
 
@@ -462,7 +474,7 @@ use File::Spec;
 
 use vars qw( $VERSION $AUTOLOAD );
 
-$VERSION = '0.43';
+$VERSION = '0.44';
 
 sub parameters {
     shift;
@@ -471,38 +483,41 @@ sub parameters {
 
     # create a read-only data structure
     my $parms = \{
-        interact                =>  {type=>'bool',  default=>1,         },
-        name                    =>  {type=>'str',                       },
-        type                    =>  {type=>'str',                       },
-        allow_null              =>  {type=>'bool',  default=>0,         },
-        timeout                 =>  {type=>'num',   default=>600,       },
-        maxtries                =>  {type=>'num',   default=>20,        },
-        shared_autoformat_args  =>  {type=>'href',                      },
-        menu                    =>  {type=>'str',                       },
-        msg                     =>  {type=>'str',                       },
-        msg_indent              =>  {type=>'num',   default=>0,         },
-        msg_newline             =>  {type=>'num',   default=>1,         },
-        prompt                  =>  {type=>'str',   default=>'> ',      },
-        reprompt                =>  {type=>'str',                       },
-        prompt_indent           =>  {type=>'num',   default=>4,         },
-        case                    =>  {type=>'str',                       },
-        confirm                 =>  {type=>'bool',  default=>0,         },
-        echo_quote              =>  {type=>'str',   default=>"'",       },
-        delimiter               =>  {type=>'str',                       },
-        delimiter_spacing       =>  {type=>'bool',  default=>1,         },
-        min_elem                =>  {type=>'num',                       },
-        max_elem                =>  {type=>'num',                       },
-        unique_elem             =>  {type=>'bool',                      },
-        default                 =>  {type=>['str','aref'],              },
-        date_format_display     =>  {type=>'str',   default=>'%c',      },
-        date_format_return      =>  {type=>'str',   default=>'%c',      },
-        FH_OUT                  =>  {type=>'glob',  default=>\*STDOUT,  },
-        FH_IN                   =>  {type=>'glob',  default=>\*STDIN,   },
-        term_width              =>  {type=>'num',   default=>72,        },
-        ReadMode                =>  {type=>'num',                       },
-        dbh                     =>  {type=>'obj',   default=>'',        },
-        translate               =>  {type=>'aref',                      },
-        check                   =>  {type=>['str','aref','qr//'],       },
+        interact                =>  {type=>'bool',  default=>1,             },
+        name                    =>  {type=>'str',                           },
+        type                    =>  {type=>'str',                           },
+        allow_null              =>  {type=>'bool',  default=>0,             },
+        timeout                 =>  {type=>'num',   default=>600,           },
+        maxtries                =>  {type=>'num',   default=>20,            },
+        shared_autoformat_args  =>  {type=>'href',                          },
+        menu                    =>  {type=>'str',                           },
+        msg                     =>  {type=>'str',                           },
+        succinct                =>  {type=>'bool',  default=>0,             },
+        msg_indent              =>  {type=>'num',   default=>0,             },
+        msg_newline             =>  {type=>'num',   default=>1,             },
+        prompt                  =>  {type=>'str',   default=>'> ',          },
+        reprompt                =>  {type=>'str',                           },
+        prompt_indent           =>  {type=>'num',   default=>4,             },
+        case                    =>  {type=>'str',                           },
+        confirm                 =>  {type=>'bool',  default=>0,             },
+        echo                    =>  {type=>'bool',  default=>0,             },
+        echo_quote              =>  {type=>'str',   default=>"'",           },
+        delimiter               =>  {type=>'str',                           },
+        delimiter_spacing       =>  {type=>'bool',  default=>1,             },
+        min_elem                =>  {type=>'num',                           },
+        max_elem                =>  {type=>'num',                           },
+        unique_elem             =>  {type=>'bool',                          },
+        default                 =>  {type=>['str','aref'],                  },
+        check_default           =>  {type=>'bool',  default=>0,             },
+        date_format_display     =>  {type=>'str',   default=>'%c',          },
+        date_format_return      =>  {type=>'str',   default=>'%c',          },
+        FH_OUT                  =>  {type=>'glob',  default=>\*STDOUT,      },
+        FH_IN                   =>  {type=>'glob',  default=>\*STDIN,       },
+        term_width              =>  {type=>'num',   default=>72,            },
+        ReadMode                =>  {type=>'num',                           },
+        dbh                     =>  {type=>'obj',   default=>'',            },
+        translate               =>  {type=>'aref',                          },
+        check                   =>  {type=>['str','aref','qr//','coderef'], },
     };
 
     if ($args{type}) {
@@ -594,7 +609,7 @@ sub process_args {
     my $self = shift;
 
     ### @_ processing
-    # we'll accept key value pairs as a list, aref, or an href
+    # we'll accept key value pairs as an array, aref, or an href
     if ($#_ == 0) {
         if (ref $_[0] eq 'HASH') {
             @_ = %{ $_[0] };
@@ -656,6 +671,10 @@ sub process_args {
             };
         }
 
+        # default the date formatting
+        $args{date_format_display} = '%c' unless (defined $args{date_format_display});
+        $args{date_format_return} = '%c' unless (defined $args{date_format_return});
+
         # convert any default value(s) to epoch seconds
         if (defined $args{default}) {
             if (ref $args{default}) {
@@ -689,6 +708,7 @@ sub new_check {
     }
 
     my @check_objects;
+
 
     my $add_check_object = sub {
         my $check = shift;
@@ -758,11 +778,11 @@ sub new_check {
         } elsif ($ref eq '_check_object') {
             push @check_objects, $elem;
 
-        } elsif (! $ref or $ref eq 'Regexp') {
+        } elsif (! $ref or $ref eq 'Regexp' or $ref eq 'CODE') {
             $add_check_object->( $elem );
 
         } else {
-            die "the new_check constructor accepts only one scalar, aref, regex_ref, or check object argument";
+            die "the new_check constructor accepts only one scalar, aref, regex_ref, code_ref, or check object argument";
 
         }
     };
@@ -999,66 +1019,87 @@ sub get {
                             );
             }
         } else {
-            # This is the default message format
-            #
-            # [Name: ][The default value/values is/are LIST_HERE.  ]Enter a value[ or list of values delimited with DELIMITER_DESC_HERE][ (use the word NULL to indicate a null value/any null values)].
+            if (! $parm->{succinct}) {
+                # This is the default message format
+                #
+                # [Name: ][The default value/values is/are LIST_HERE.  ]Enter a value[ or list of values delimited with DELIMITER_DESC_HERE][ (use the word NULL to indicate a null value/any null values)].
 
-            # set up words
-            my $name = (defined $parm->{name}) ? "$parm->{name}: " : '';
+                # set up words
+                my $name = (defined $parm->{name}) ? "$parm->{name}: " : '';
 
-            my $enter = 'Enter a value';
+                my $enter = 'Enter a value';
 
-            my $default = '';
-            my $w_is_are = 'is';
-            if (defined $parm->{default} and $parm->{default} ne '') {
-                $enter = 'enter a value';
+                my $default = '';
+                my $w_is_are = 'is';
+                if (defined $parm->{default} and $parm->{default} ne '') {
+                    $enter = 'enter a value';
 
-                if (defined $delimiter) {
-                    if (ref $parm->{default} eq 'ARRAY') {
-                        my @defaults;
-                        if(defined $parm->{type} and $parm->{type} eq 'date') {
-                            push @defaults, UnixDate("epoch $_",$parm->{date_format_display}) for @{ $parm->{default} };
+                    if (defined $delimiter) {
+                        if (ref $parm->{default} eq 'ARRAY') {
+                            my @defaults;
+                            if (defined $parm->{type} and $parm->{type} eq 'date') {
+                                push @defaults, UnixDate("epoch $_",$parm->{date_format_display}) for @{ $parm->{default} };
+                            } else {
+                                push @defaults, @{ $parm->{default} };
+                            }
+                            if ($#{ $parm->{default} }) {
+                                $w_value_values = 'values';
+                                $w_is_are = 'are';
+                                $w_default = join "$delimiter " => @defaults;
+                            } else {
+                                $w_default = $parm->{default}->[0];
+                            }
                         } else {
-                            push @defaults, @{ $parm->{default} };
-                        }
-                        if ($#{ $parm->{default} }) {
-                            $w_value_values = 'values';
-                            $w_is_are = 'are';
-                            $w_default = join "$delimiter " => @defaults;
-                        } else {
-                            $w_default = $parm->{default}->[0];
+                            if (defined $parm->{type} and $parm->{type} eq 'date') {
+                                $w_default = UnixDate('epoch ' . $parm->{default}, '%s' );
+                            } else {
+                                $w_default = $parm->{default};
+                            }
                         }
                     } else {
-                        if (defined $parm->{type} and $parm->{type} eq 'date') {
-                            $w_default = UnixDate('epoch ' . $parm->{default}, '%s' );
-                        } else {
-                            $w_default = $parm->{default};
-                        }
+                        $w_value_values = 'value';
                     }
-                } else {
-                    $w_value_values = 'value';
+
+                    $default =  "The default $w_value_values $w_is_are $w_default.  Press ENTER to accept the default, or ";
                 }
 
-                $default =  "The default $w_value_values $w_is_are $w_default.  Press ENTER to accept the default, or ";
+                my $or_list_of_values = '';
+
+                my $use_NULL_use_NULLs = ($parm->{allow_null})
+                                       ? ' (use the word NULL to indicate a null value)'
+                                       : '';
+
+                if (defined $delimiter) {
+                  $or_list_of_values = " or list of values delimited with $delimiter_desc";
+                  $use_NULL_use_NULLs = ' (use the word NULL to indicate any null values)' if ($parm->{allow_null});
+                }
+
+                my $msg = $name . $default . $enter . $or_list_of_values . $use_NULL_use_NULLs . '.';
+
+                print $OUT ("\n" x $parm->{msg_newline}),
+                           autoformat( $msg, $parm->_get_autoformat_args({left=>$parm->{msg_indent}}) );
+            } else {
+                print $OUT ("\n" x $parm->{msg_newline});
+                print $OUT autoformat( 
+                                       (
+                                         defined $parm->{name}
+                                         ? $parm->{name}
+                                         : ''
+                                       ),
+                                       $parm->_get_autoformat_args({left=>$parm->{msg_indent}})
+                                     );
+
+                # if a default was specified
+                if (defined $parm->{default}) {
+                    # if msg is just the default
+                    my $defaults = $parm->parameters(default => 1);
+                    if ($parm->{prompt} eq $defaults->{prompt}) {
+                        # make nice, succinct prompt: [default_value]>
+                        $parm->{prompt} = '[' . $parm->{default} . ']> ';
+                    }
+                }
             }
-
-            my $or_list_of_values = '';
-
-            my $use_NULL_use_NULLs = ($parm->{allow_null})
-                                     ? ' (use the word NULL to indicate a null value)'
-                                     : '';
-
-            if (defined $delimiter) {
-                $or_list_of_values = " or list of values delimited with $delimiter_desc";
-                $use_NULL_use_NULLs = ' (use the word NULL to indicate any null values)' if ($parm->{allow_null});
-            }
-
-            my $msg = $name . $default . $enter . $or_list_of_values . $use_NULL_use_NULLs . '.';
-
-            print $OUT ("\n" x $parm->{msg_newline}),
-                       autoformat( $msg, $parm->_get_autoformat_args({left=>$parm->{msg_indent}}) );
         }
-
 
         my $ok = 0;
         my $i = 0;
@@ -1219,7 +1260,7 @@ sub get {
                             )
                         )
                     );
-                    $return = $parm->{default};
+                    # $return will be set to the default below...
                 } else {
                     my @confirm;
                     if (defined $parm->{type} and $parm->{type} eq 'date') {
@@ -1245,11 +1286,10 @@ sub get {
                         )
                     );
                 }
-            } else {
-                $return = $parm->{default} if (!ref $stdin and $stdin eq '');
             }
 
-            if (ref $stdin or $stdin ne '') {
+            # if user entered anything, it's in an aref by now
+            if (ref $stdin) {
                 if ($parm->{check}) {
                     my @validate_args = ($stdin);
                     if (defined $parm->{type} and $parm->{type} eq 'date') {
@@ -1258,9 +1298,21 @@ sub get {
                     $return = $parm->validate( @validate_args );
                     next PROMPT unless defined $return;
                 }
+            # user didn't enter anything, so let's see about using the default
+            } else {
+                if ($parm->{check_default}) {
+                    my @validate_args = ($parm->{default});
+                    if (defined $parm->{type} and $parm->{type} eq 'date') {
+                        push @validate_args, (date_format_return => '%s');
+                    }
+                    $return = $parm->validate( @validate_args );
+                    next PROMPT unless defined $return;
+                } else {
+                    $return = $parm->{default};
+                }
             }
 
-            # Catch anything that fell through
+            # Catch anything that fell through [I don't think this is necessary any more...]
             $return = $stdin unless defined $return;
 
             $return = [ $return ] unless (ref $return eq 'ARRAY');
@@ -1269,6 +1321,34 @@ sub get {
         }
 
         $return = $parm->translate( $return );
+
+        if ($parm->{echo}) {
+            my @echo;
+            if (defined $parm->{type} and $parm->{type} eq 'date') {
+                push @echo, UnixDate("epoch $_", $parm->{date_format_display}) for (@$return);
+            } else {
+                @echo = @$return;
+            }
+
+            if ($parm->{echo_quote}) {
+                $_ = $parm->{echo_quote} . $_ . $parm->{echo_quote} for @echo;
+            }
+            
+            print $OUT autoformat( 
+                                   (
+                                     defined $parm->{name}
+                                     ? $parm->{name}
+                                     : 'parm'
+                                   ) .
+                                   ' set to: ' . 
+                                   (
+                                     defined $parm->{delimiter}
+                                     ? join $parm->{delimiter}, @echo
+                                     : $echo[0]
+                                   ),
+                                   $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                                 );
+        }
 
         if (defined $parm->{type} and $parm->{type} eq 'date') {
             $_ = UnixDate("epoch $_",$parm->{date_format_return}) for @$return;
@@ -1324,7 +1404,7 @@ sub validate {
     }
 
 
-    # $self->{check} is either an aref of multiple check
+    # $parm->{check} is either an aref of multiple check
     # objects, or just one check object by itself
     for
     (
@@ -1334,25 +1414,19 @@ sub validate {
     )
     {
         my $check_type = $_->{check_type};
-        if ($check_type eq 'custom_check') {
-            # if invocant specified a custom check, then they must
-            # have built in a coderef for our use at this point
-            $return = $_->{check}->($data, @_);
-        } else {
-            # ensure there exists a method named the same as check_type
-            unless ($parm->can( $check_type )) {
-                die "You tried to invoke a check named $check_type, but no method of that name exists.  Did you forget to code the method?";
-            }
-
-            # use the method named the same as check_type, passing our
-            # current check_type and check object in as a key=>value  pair
-            $return = $parm->$check_type(
-                $data,
-                $check_type => $_,
-                @_,
-            );
-            last unless defined $return;
+        # ensure there exists a method named the same as check_type
+        unless ($parm->can( $check_type )) {
+            die "You tried to invoke a check named $check_type, but no method of that name exists.  Did you forget to code the method?";
         }
+
+        # use the method named the same as check_type, passing our
+        # current check_type and check object in as a key=>value  pair
+        $return = $parm->$check_type(
+            $data,
+            $check_type => $_,
+            @_,
+        );
+        last unless defined $return;
     }
 
     return $return;
@@ -1406,6 +1480,46 @@ sub translate {
                 $data = $_->[1];
             }
         }
+    }
+
+    return $data;
+}
+
+sub custom_check {
+    my $self = shift;
+    my $data = shift;
+    my $parm = $self->process_args( @_ );
+    bless $parm => ref($self);
+
+    my $OUT = $parm->{FH_OUT};
+
+    unless (ref $data eq 'ARRAY') {
+        die "Data passed to _custom_check must be aref or scalar" if (ref $data);
+        $data = [ $data ];
+    }
+
+    my $qr_NULL = (defined $parm->{allow_null} and $parm->{allow_null})
+                ? qr/^NULL$/i
+                : '';
+
+    my $check = sub {
+        my $try = shift;
+        return 1 if ($qr_NULL and $try =~ /$qr_NULL/);
+        return 1 if $parm->{custom_check}->{check}->($try);
+        if (defined $parm->{custom_check}->{err_msg}) {
+            print $OUT
+            (
+                autoformat(
+                            $parm->interpolate($parm->{custom_check}->{err_msg},$try,$parm->{custom_check}->{check}),
+                            $parm->_get_autoformat_args({left=>$parm->{prompt_indent}})
+                          )
+            );
+        }
+        return 0;
+    };
+
+    for (@$data) {
+        return undef unless $check->( $_ );
     }
 
     return $data;

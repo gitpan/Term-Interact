@@ -8,6 +8,7 @@ WriteMakefile(
                          Text::Autoformat => '0.00',
                          Term::ReadKey    => '0.00',
                          Date::Manip      => '0.00',
+                         File::Spec       => '0.00',
                        },
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'Interact.pm', # retrieve abstract from module

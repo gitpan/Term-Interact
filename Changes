@@ -34,3 +34,11 @@ Revision history for Perl extension Term::Interact.
           returns a list of available parameters.
         - accessor/mutator methods enabled for all parameters. 
 
+0.44 Thu Oct 10 2002
+        - custom check functionality was broken; now fixed.
+        - added 'succinct' parameter to allow less wordy
+          interaction.
+        - added 'echo' parameter to tell get method to echo
+          validated input to FH_OUT before it returns.
+        - added 'check_default' parameter to force validation
+          of default value if it is chosen.

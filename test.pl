@@ -271,3 +271,35 @@ else
 {
     ok(0);
 }
+
+@tries = ( '', 'no', 'nope', 'yes' );
+print STDIN "$_" for @tries;
+my $yes = $ti->get (
+    succinct      => 1,
+    name          => 'yes',
+    default       => 'foo',
+    check_default => 1,
+    echo          => 1,
+    check         => [
+                       sub{shift() eq 'yes' ? 1 : 0},
+                       "%s is not 'yes'."
+                     ]
+);
+undef @stdout;
+push @stdout, $_ while (<STDOUT>);
+if ( scalar @stdout == 10 ) {
+    ok(  $stdout[0] eq ""                   ? 1 : 0  );
+    ok(  $stdout[1] eq "yes"                ? 1 : 0  );
+    ok(  $stdout[2] eq '[foo]>'             ? 1 : 0  );
+    ok(  $stdout[3] eq "'foo'isnot'yes'."   ? 1 : 0  );
+    ok(  $stdout[4] eq '[foo]>'             ? 1 : 0  );
+    ok(  $stdout[5] eq "'no'isnot'yes'."     ? 1 : 0  );
+    ok(  $stdout[6] eq '[foo]>'             ? 1 : 0  );
+    ok(  $stdout[7] eq "'nope'isnot'yes'."  ? 1 : 0  );
+    ok(  $stdout[8] eq '[foo]>'             ? 1 : 0  );
+    ok(  $stdout[9] eq "yessetto:'yes'"     ? 1 : 0  );
+} else {
+    ok(0);
+}
+ok(  $yes eq 'yes'  ? 1 : 0  );
+
