@@ -41,9 +41,9 @@ BEGIN {
     eval { require DBI };
     if ($@) {
         print STDERR "Could not require DBI...   will skip sql check tests\n";
-        $plan_tests = 36;
+        $plan_tests = 38;
     } else {
-        $plan_tests = 41;
+        $plan_tests = 43;
     }
     plan tests => $plan_tests;
  };
@@ -64,6 +64,18 @@ my $ti = Term::Interact->new(
 ok( ref $ti ? 1 : 0 );
 
 
+### test parameters method
+# get a href of all parm info
+my $parm = $ti->parameters;
+ok( ref $parm eq 'HASH' ? 1 : 0 );
+
+# get list or parm names
+my @parameters = $ti->parameters;
+
+# number of hash keys should equal number of parameters 
+ok( keys %{$parm} == @parameters ? 1 : 0 );
+
+### test checks 
 # set all values to fail except the last for testing
 # also any some '' may be included to meet the needs
 # of confirmation prompts
@@ -154,7 +166,12 @@ unless ($@) {
         print STDERR "Could not connect to a database using DBI.  Perhaps\n";
         print STDERR "you have not yet edited the connect parameters in\n";
         print STDERR "this test script to allow sql_check testing...\n";
-        print STDERR "Skipping sql_check tests\n";
+        print STDERR "Failing sql_check tests 21 - 25.\n";
+        ok(0);
+        ok(0);
+        ok(0);
+        ok(0);
+        ok(0);
     } else {
         @tries = ( 'FOO', 'az' );
         print STDIN "$_" for @tries;
@@ -177,6 +194,9 @@ unless ($@) {
             ok(  $stdout[2] eq "'FOO'isnotavalidstatecode.Validcodesare:AZ"     ? 1 : 0  );
             ok(  $stdout[3] eq 'TryAgain:'                                      ? 1 : 0  );
         } else {
+            ok(0);
+            ok(0);
+            ok(0);
             ok(0);
         }
         ok(  $state eq 'AZ'  ? 1 : 0  );

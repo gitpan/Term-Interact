@@ -22,7 +22,7 @@ Term::Interact enables you to interactively get validated data from a user.  Thi
 
 =head1 EXAMPLES
 
- # set up object with some optional parameters
+ # set up object -- all parameters are optional
  my $ti = Term::Interact->new(
 
    # set desired date formatting behavior
@@ -194,13 +194,33 @@ The C<validate> method accepts the data to be validated as its first parameter, 
 
 The C<new_check> method uses a C<check> parameter value to construct one or more check objects (which are returned in an aref).  You'll not usually invoke this method, because the C<validate> method transparently invokes it to transform its C<check> parameter value into a collection of check objects.  (These check objects are what the internal check methods actually use to validate data.)  Nonetheless, you may invoke this method if you like.  By doing so you could initially set the C<check> parameter to an aref of check objects when invoking C<get> or C<validate>.
 
+=item C<parameters>
+
+The C<parameters> method returns information about available parameters.  If called with no args, it will return a list of available parameter names in list context, or an href of all parameter information in scalar context:
+  {
+    interact => {type => 'bool', default => 1   },
+    name     => {type => 'str',                 } ,
+    ...
+    check    => {type => ['str','aref','qr//'], }
+  }
+
+If called with a specific type, ala $ti->parameter(type => 'bool'), a list of parameters matching that type will be returned in list context, or an aref of parameter_name => type pairs will be returnes in scalar context.  Also note that not-types are available, ala $ti->parameter(type => '!bool').
+
+If called with the key value pair (default => 1), the method will return a list of parameters that have default values.  If called this way in scalar context, the method will return an aref of parameter_name => default_value key value pairs.
+
+All of the parameters are listed below in the PARAMETER section, and are all accessible via self-named mutator/accessor mehods.  
+
 =back
 
 =head2 PARAMETERS
 
-These parameters are available for use with C<new>, where they will be stored within the constructed object.  They are also available for use with the C<get> and C<validate> methods, where they will override any values stored in the object, but only for the duration of that method call.  In other words, the parameter values stored in the object during construction will not be changed by any variant parameter values subsequently supplied to C<get> or C<validate>.
+These parameters are available for use with C<new>, where they will be stored within the constructed object.  They are also available for use with the C<get> and C<validate> methods, where they will override any values stored in the object, but only for the duration of that method call.  In other words, the parameter values stored in the object during construction will not be changed by any variant parameter values subsequently supplied to C<get> or C<validate>.  They may be changed, however, by invoking the self-named method accessor/mutators, ala $ti->timeout( 30 ).
 
 =over 2
+
+=item C<interact>
+
+I<bool>: Defaults to 1, of course, but you may turn interact mode off.  In that case the validate method works as normal, but the get method will simply return the default value (or die if none is set).
 
 =item C<name>
 
@@ -248,7 +268,7 @@ I<str>: Defaults to '> '.  User will be prompted for input with this string.
 
 =item C<reprompt>
 
-I<str>: User will be re-prompted for input (as necessary) with this string.  Defaults to the value of C<prompt>.
+I<str>: User will be re-prompted for input (as necessary) with this string.  If not set, the value of C<prompt> will be used instead.
 
 =item C<prompt_indent>
 
@@ -262,13 +282,17 @@ I<str>: If specified, the case of user input will be adjusted prior to validatio
 
 I<bool>: Defaults to 0.  The user will be prompted to confirm the input if set to 1.
 
+=item C<echo_quote>
+
+I<str>: Defaults to "'" (a single quote).  When user input is echoed to the terminal, it will be quoted with whatever character string is found here, if any.
+
 =item C<delimiter>
 
 I<str>: Set this parameter to allow the user to enter multiple values via delimitation.  Note this is a string value, not a pattern.
 
 =item C<delimiter_spacing>
 
-I<str>: Defaults to 'auto', whereby whitespace before and after any delimiters will be discarded when reading user input.  Set it to any value other than 'auto' to disable this behavior.
+I<bool>: Defaults to 1, allowing user to add whitespace to either or both sides of the delimiter when entering a list of values.  Whitespace before and after any delimiters will then be discarded when reading user input.
 
 =item C<min_elem>
 
@@ -286,17 +310,13 @@ I<bool>: Set this parameter to require all elements of the user-entered delimite
 
 I<str> or I<aref>: If the user is permitted to input multiple values (i.e., you have specified a delimiter), you may specify multiple default values by passing them in an aref.  In any case you may pass in one default value as a string.
 
-=item C<interact>
-
-I<bool>: Defaults to 1, of course, but you may turn interact mode off.  In that case the validate method works as normal, but the get method will simply return the default value (or die if none is set).
-
 =item C<date_format_display>
 
-I<str>:  Defaults to '%c' if C<type> is set to 'date'.  This string is used to format any dates being printed to FH_OUT.  See the UnixDate function from perldoc Date::Manip for details.
+I<str>:  Defaults to '%c'.  This string is used to format any dates being printed to FH_OUT.  See the UnixDate function from perldoc Date::Manip for details.  Note this is a meaningful parameter only when used in conjunction if C<type> is set to date.
 
 =item C<date_format_return>
 
-I<str>:  Defaults to '%c' if C<type> is set to 'date'.  This string is used to format dates returned by the C<get> and C<validate> methods.  See Date::Manip's UnixDate function for details.
+I<str>:  Defaults to '%c'.  This string is used to format dates returned by the C<get> and C<validate> methods.  See Date::Manip's UnixDate function for details.  Note this is a meaningful parameter only when used in conjunction if C<type> is set to date.
 
 =item C<FH_OUT>
 
@@ -438,10 +458,124 @@ END {  ReadMode(0)  }
 use Text::Autoformat;
 use Term::ReadKey;
 use Date::Manip;
+use File::Spec;
 
-use vars qw( $VERSION );
+use vars qw( $VERSION $AUTOLOAD );
 
-$VERSION = '0.42';
+$VERSION = '0.43';
+
+sub parameters {
+    shift;
+    my $wantarray = wantarray;
+    my %args = @_;
+
+    # create a read-only data structure
+    my $parms = \{
+        interact                =>  {type=>'bool',  default=>1,         },
+        name                    =>  {type=>'str',                       },
+        type                    =>  {type=>'str',                       },
+        allow_null              =>  {type=>'bool',  default=>0,         },
+        timeout                 =>  {type=>'num',   default=>600,       },
+        maxtries                =>  {type=>'num',   default=>20,        },
+        shared_autoformat_args  =>  {type=>'href',                      },
+        menu                    =>  {type=>'str',                       },
+        msg                     =>  {type=>'str',                       },
+        msg_indent              =>  {type=>'num',   default=>0,         },
+        msg_newline             =>  {type=>'num',   default=>1,         },
+        prompt                  =>  {type=>'str',   default=>'> ',      },
+        reprompt                =>  {type=>'str',                       },
+        prompt_indent           =>  {type=>'num',   default=>4,         },
+        case                    =>  {type=>'str',                       },
+        confirm                 =>  {type=>'bool',  default=>0,         },
+        echo_quote              =>  {type=>'str',   default=>"'",       },
+        delimiter               =>  {type=>'str',                       },
+        delimiter_spacing       =>  {type=>'bool',  default=>1,         },
+        min_elem                =>  {type=>'num',                       },
+        max_elem                =>  {type=>'num',                       },
+        unique_elem             =>  {type=>'bool',                      },
+        default                 =>  {type=>['str','aref'],              },
+        date_format_display     =>  {type=>'str',   default=>'%c',      },
+        date_format_return      =>  {type=>'str',   default=>'%c',      },
+        FH_OUT                  =>  {type=>'glob',  default=>\*STDOUT,  },
+        FH_IN                   =>  {type=>'glob',  default=>\*STDIN,   },
+        term_width              =>  {type=>'num',   default=>72,        },
+        ReadMode                =>  {type=>'num',                       },
+        dbh                     =>  {type=>'obj',   default=>'',        },
+        translate               =>  {type=>'aref',                      },
+        check                   =>  {type=>['str','aref','qr//'],       },
+    };
+
+    if ($args{type}) {
+        my @return;
+        # allow processing of types that start with ! (not)
+        my $not = $args{type} =~ s/^!//;
+        if ($not) {
+            @return = map
+            {
+                # if an aref
+                if (ref $$parms->{$_}{type}) {
+                    my $key = $_;
+                    !grep( /$args{type}/, @{$$parms->{$key}{type}} )
+                    ?
+                        $wantarray
+                        ? $key
+                        : ($key => $$parms->{$key}{type})
+                    : ()
+                } else {
+                    $$parms->{$_}{type} ne $args{type}
+                    ?
+                        $wantarray
+                        ? $_
+                        : ($_ => $$parms->{$_}{type})
+                    : ()
+                }
+            } keys %{$$parms};
+
+        } else {
+            @return = map
+            {
+                # if an aref
+                if (ref $$parms->{$_}{type}) {
+                    my $key = $_;
+                    grep( $key, @{$$parms->{$_}{type}} )
+                    ?
+                        $wantarray
+                        ? $key
+                        : ($key => $$parms->{$_}{type})
+                    : ()
+                } else {
+                    $$parms->{$_}{type} eq $args{type}
+                    ?
+                        $wantarray
+                        ? $_
+                        : ($_ => $$parms->{$_}{type})
+                    : ()
+                }
+            } keys %{$$parms};
+        }
+        # return list of parms or href with relevant parm=>type pairs
+        return $wantarray ? @return : { @return };
+
+    } elsif ($args{default}) {
+        my @return = map
+        {
+            exists $$parms->{$_}{default}
+            ? (
+                $wantarray
+                ? $_
+                : ($_, $$parms->{$_}{default})
+              )
+            : ()
+        } keys %{$$parms};
+
+        # return list of parms or href with relevant parm=>default pairs
+        return $wantarray ? @return : { @return };
+    }
+
+    # all other cases
+    return $wantarray ? keys %{$$parms} : $$parms;
+}
+
 
 sub new {
     my $class = shift;
@@ -460,7 +594,7 @@ sub process_args {
     my $self = shift;
 
     ### @_ processing
-    # we'll accept key value pairs as an array, aref, or an href
+    # we'll accept key value pairs as a list, aref, or an href
     if ($#_ == 0) {
         if (ref $_[0] eq 'HASH') {
             @_ = %{ $_[0] };
@@ -470,7 +604,6 @@ sub process_args {
             die "invalid arg";
         }
     }
-
     my %args = @_;
 
     ### $self processing
@@ -481,34 +614,23 @@ sub process_args {
         }
     }
 
-    ### %defaults setup
-    my %defaults = (
-        interact                => 1,
-        allow_null              => 0,
-        timeout                 => 600,
-        maxtries                => 20,
-        msg_newline             => 1,
-        msg_indent              => 0,
-        prompt                  => '> ',
-        prompt_indent           => 4,
-        confirm                 => 0,
-        echo_quote              => "'",
-        delimiter_spacing       => 'auto',
-        term_width              => 72,
-        dbh                     => '',
-        FH_IN                   => \*STDIN,
-        FH_OUT                  => \*STDOUT,
-    );
+    my $defaults = $self->parameters(default=>1);
 
-    for (keys %defaults) {
+    for (keys %{$defaults}) {
         unless (exists $args{$_}) {
-            $args{$_} = $defaults{$_};
+            $args{$_} = $defaults->{$_};
         }
     }
 
-    # term width settings
-    my ($width) = GetTerminalSize( $args{FH_OUT} );
-    $args{term_width} = ($width < $args{term_width} ? $width : $args{term_width});
+    # get term width settings if we can, otherwise we'll silently move on
+    open SAVEERR, ">&STDERR" or die;
+    open STDERR, ">" . File::Spec->devnull or die;
+    eval {
+        my ($width) = GetTerminalSize( $args{FH_OUT} );
+        $args{term_width} = ($width < $args{term_width} ? $width : $args{term_width});
+    };
+    open STDERR, ">&SAVEERR" or die;
+    close SAVEERR;
 
     # autoformat settings
     $args{shared_autoformat_args} = {all => 1, fill => 0, right => $args{term_width}};
@@ -533,10 +655,6 @@ sub process_args {
                 return $date;
             };
         }
-
-        # default the date formatting
-        $args{date_format_display} = '%c' unless (defined $args{date_format_display});
-        $args{date_format_return} = '%c' unless (defined $args{date_format_return});
 
         # convert any default value(s) to epoch seconds
         if (defined $args{default}) {
@@ -571,7 +689,6 @@ sub new_check {
     }
 
     my @check_objects;
-
 
     my $add_check_object = sub {
         my $check = shift;
@@ -763,7 +880,7 @@ sub _classify_check_type {
 # or getting of individual parm values, ala:
 #    print $ui->dbh;
 sub AUTOLOAD {
-    return if our $AUTOLOAD =~ /::DESTROY$/;
+    return if $AUTOLOAD =~ /::DESTROY$/;
     $AUTOLOAD =~ s/.*:://;  # trim the package name
     my $self = shift;
 
@@ -843,7 +960,7 @@ sub get {
             $delimiter_pattern = quotemeta $delimiter;
             $delimiter_pattern_split = $delimiter_pattern;
 
-            unless (defined $parm->{delimiter_spacing} and $parm->{delimiter_spacing} ne 'auto') {
+            if ($parm->{delimiter_spacing}) {
                 $delimiter_pattern_split = '\s*' . $delimiter_pattern_split . '\s*'
             }
 
@@ -996,7 +1113,7 @@ sub get {
             } else {
                 # split input into an aref if apropriate
                 if (defined $delimiter and $stdin =~ /$delimiter_pattern/) {
-                    unless (defined $parm->{delimiter_spacing} and $parm->{delimiter_spacing} ne 'auto') {
+                    if ($parm->{delimiter_spacing}) {
                         # get rid of any whitespace at front of string
                         $stdin =~ s/^\s*//;
                         # get rid of any delimiter and whitespace at beginning of string

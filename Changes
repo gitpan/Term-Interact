@@ -25,3 +25,12 @@ Revision history for Perl extension Term::Interact.
         - now untars correctly (into a subdirectory) instead
           of into individual files.  :-)
 
+0.43 Thu Jul 25 2002
+        - now works under cron (obviously in a non-interactive
+          mode :-)
+        - new method: parameters.  Can return info regarding
+          available parameters, their types, and their
+          defaults.  Called with no arguments, it simply
+          returns a list of available parameters.
+        - accessor/mutator methods enabled for all parameters. 
+
