@@ -34,6 +34,7 @@ sub READLINE {
 package main;
 use strict;
 use Test;
+use Date::Manip;
 
 BEGIN {
     my $plan_tests;
@@ -51,15 +52,12 @@ BEGIN {
 use Term::Interact;
 ok(1); # ok so far...
 
-tie *STDIN  => "TestINOUT" or die "Couldn't tie STDIN!";
-tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
-
 # set up object
 my $ti = Term::Interact->new(
     date_format_display  =>  '%d-%b-%Y',
-    date_format_return  =>  '%d-%b-%Y',
-    FH_IN               =>  \*STDIN,
-    FH_OUT              =>  \*STDOUT,
+    date_format_return   =>  '%d-%b-%Y',
+    FH_IN                =>  \*STDIN,
+    FH_OUT               =>  \*STDOUT,
 );
 ok( ref $ti ? 1 : 0 );
 
@@ -80,6 +78,9 @@ ok( keys %{$parm} == @parameters ? 1 : 0 );
 # also any some '' may be included to meet the needs
 # of confirmation prompts
 my @tries;
+
+tie *STDIN  => "TestINOUT" or die "Couldn't tie STDIN!";
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
 
 # set up simulated user input, based on knowledge
 # of what Term::Interact will prompt with when
@@ -102,6 +103,7 @@ my $num1 = $ti->get(
 # when the module is working properly.
 my @stdout;
 push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
 
 # While it would be nice to abstract the following
 # tests into a generic test subroutine for use in
@@ -130,6 +132,9 @@ if ( scalar @stdout == 6 ) {
 ok(  $num1 == 2  ? 1 : 0  );
 
 
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
+undef @stdout;
+push @stdout, $_ while (<STDOUT>);
 
 @tries = ( '2002-03-12', '', 'foo', '2001-02-13', '' );
 print STDIN "$_" for @tries;
@@ -144,6 +149,7 @@ my $date = $ti->get (
 );
 undef @stdout;
 push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
 if ( scalar @stdout == 8 ) {
     ok(  $stdout[0] eq "Datefrom2001:Enteravalue."                      ? 1 : 0  );
     ok(  $stdout[1] eq '>'                                              ? 1 : 0  );
@@ -173,6 +179,7 @@ unless ($@) {
         ok(0);
         ok(0);
     } else {
+        tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
         @tries = ( 'FOO', 'az' );
         print STDIN "$_" for @tries;
         my $state = $ti->get (
@@ -188,6 +195,7 @@ unless ($@) {
         );
         undef @stdout;
         push @stdout, $_ while (<STDOUT>);
+        untie *STDOUT or die "Couldn't untie STDOUT!";
         if ( scalar @stdout == 4 ) {
             ok(  $stdout[0] eq "Pleaseenteravalidstate."                        ? 1 : 0  );
             ok(  $stdout[1] eq 'State:'                                         ? 1 : 0  );
@@ -205,6 +213,7 @@ unless ($@) {
 }
 
 
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
 @tries = ( 'f', 1, -1, 14, 5 );
 print STDIN "$_" for @tries;
 my $num2 = $ti->get (
@@ -216,6 +225,7 @@ my $num2 = $ti->get (
 );
 undef @stdout;
 push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
 if ( scalar @stdout == 10 ) {
     ok(  $stdout[0] eq "NumberLessThan10andMorethan3:Enteravalue."      ? 1 : 0  );
     ok(  $stdout[1] eq '>'                                              ? 1 : 0  );
@@ -233,6 +243,7 @@ if ( scalar @stdout == 10 ) {
 ok(  $date eq '13-Feb-2001'  ? 1 : 0  );
 
 
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
 @tries = ( 1, 's', 'X', 'a, b', 'A, B, C' );
 print STDIN "$_" for @tries;
 my $grades = $ti->get (
@@ -242,6 +253,7 @@ my $grades = $ti->get (
 );
 undef @stdout;
 push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
 if ( scalar @stdout == 6 ) {
     ok(  $stdout[0] eq "Lettergrade:Enteravalueorlistofvaluesdelimitedwithcommas."      ? 1 : 0  );
     ok(  $stdout[1] eq '>'                                                              ? 1 : 0  );
@@ -272,6 +284,7 @@ else
     ok(0);
 }
 
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
 @tries = ( '', 'no', 'nope', 'yes' );
 print STDIN "$_" for @tries;
 my $yes = $ti->get (
@@ -287,6 +300,7 @@ my $yes = $ti->get (
 );
 undef @stdout;
 push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
 if ( scalar @stdout == 10 ) {
     ok(  $stdout[0] eq ""                   ? 1 : 0  );
     ok(  $stdout[1] eq "yes"                ? 1 : 0  );
@@ -302,4 +316,27 @@ if ( scalar @stdout == 10 ) {
     ok(0);
 }
 ok(  $yes eq 'yes'  ? 1 : 0  );
+
+tie *STDOUT => "TestINOUT" or die "Couldn't tie STDOUT!";
+@tries = ( '' );
+print STDIN "$_" for @tries;
+my $date = $ti->get (
+    name          => 'Order date',
+    default       => 'today',
+    type          => 'date',
+);
+undef @stdout;
+push @stdout, $_ while (<STDOUT>);
+untie *STDOUT or die "Couldn't untie STDOUT!";
+my $expected_default_date = UnixDate('today', '%d-%b-%Y');
+my $expected_first_stdout = "Orderdate:Thedefaultvalueis"
+                          . $expected_default_date
+                          . ".PressENTERtoacceptthedefault,orenteravalue.";
+if ( scalar @stdout == 2 ) {
+    ok(  $stdout[0] eq $expected_first_stdout ? 1 : 0  );
+    ok(  $stdout[1] eq '>'                    ? 1 : 0  );
+} else {
+    ok(0);
+}
+ok(  $date eq $expected_default_date  ? 1 : 0  );
 
